@@ -27,8 +27,8 @@
 
 /*-------------Do not change between dashed lines----------------*/
 
-//macro
-#define		Malloc(type, size)	(type*)malloc((size)*sizeof(type))
+// macro
+#define	Malloc(type, size)		(type*)malloc((size)*sizeof(type))
 
 // typedef
 typedef unsigned int			UInt;
@@ -37,9 +37,37 @@ typedef unsigned long			ULong;
 typedef	double					Double;
 typedef bool					Bool;
 
+enum ERROR_CODES
+{
+	ERR_OK,
+	ERR_FILE_NOT_EXIST,
+	ERR_FILE_UNABLE_TO_OPEN,
+	ERR_OUT_OF_BOUNDARY,
+};
+
+enum MODULE_PHASE
+{
+	PHASE_NO_STATUS,
+	PHASE_TRAINING,
+	PHASE_TESTING,
+	
+};
+
+
 /*-------------Do not change between dashed lines----------------*/
 
+typedef	float	FEATURE_TYPE;
 
+#define	ROOT_PATH				"../../../"
+
+
+// datasets to test
+enum DATASET_TYPES
+{
+	VIPER = 1, CUHK01,
+};
+#define	DATASET_TYPE			VIPER				// VIPER, CUHK01...
+#define	NUM_PERSON_TRAIN		316					// number of individuals used for train
 
 /****************************************************************/
 
