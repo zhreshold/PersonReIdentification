@@ -27,38 +27,39 @@
 
 pri_dataset::pri_dataset()
 {
-	dataset_type = DATASET_TYPE;
+	datasetType = DATASET_TYPE;
 	m_phase = PHASE_TRAINING;
 
-	if (dataset_type == VIPER)
+	if (datasetType == VIPER)
 		init_viper();
 }
 
-pri_dataset::pri_dataset(int phase)
+pri_dataset::pri_dataset(const int phase)
 {
-	dataset_type = DATASET_TYPE;
+	datasetType = DATASET_TYPE;
 	m_phase = phase;
 
-	if (dataset_type == VIPER)
+	if (datasetType == VIPER)
 		init_viper();
 }
 
 pri_dataset::~pri_dataset()
 {
-	dataset_type = NULL;
+	datasetType = NULL;
 	m_phase = PHASE_NO_STATUS;
-	num_persons = 0;
-	num_person_total = 0;
-	num_shots = 0;
+	numPersons = 0;
+	numPersonTotal = 0;
+	numShots = 0;
 	filenames.clear();
-	query_idx.clear();
+	queryIdx.clear();
 }
 
 void pri_dataset::init_viper()
 {
 	// config
-	num_person_total = 632;
-	num_shots = 2;
+	numPersonTotal = 632;
+	numShots = 2;
+	gROI = Rect(8, 16, 32, 106);
 
 
 	// path
@@ -72,32 +73,34 @@ void pri_dataset::init_viper()
 	if (m_phase == PHASE_TRAINING)		
 	{
 		// init for training
-		for (int i = 0; i < num_person_total; i++)
+		for (int i = 0; i < numPersonTotal; i++)
 			perm.push_back(i);
 
-		num_persons = NUM_PERSON_TRAIN;
+		numPersons = NUM_PERSON_TRAIN;
 
 		// get random permutation by shuffling
+		srand(RANDOM_SEED);
 		random_shuffle(perm.begin(), perm.end());
 
-		for (int i = 0; i < num_persons; i++)
+		for (int i = 0; i < numPersons; i++)
 		{
 			vector<int>		personQuery;
 
 			// image 0 for person i
 			sprintf_s(filename, "%03d_00.bmp", perm[i]);
-			filenames.push_back(filename);
+			filenames.push_back(path + string(filename));
 			personQuery.push_back(index);
 			index++;
 
 			// image 1 for person i
 			sprintf_s(filename, "%03d_01.bmp", perm[i]);
-			filenames.push_back(filename);
+			filenames.push_back(path + string(filename));
 			personQuery.push_back(index);
 			index++;
 
-			// push back query indexes for person i
-			query_idx.push_back(personQuery);
+			// push back query indexes for person i, append person id
+			personQuery.push_back(perm[i]);
+			queryIdx.push_back(personQuery);
 		}
 
 		// write the rest to file for test
@@ -107,7 +110,7 @@ void pri_dataset::init_viper()
 			exit(ERR_FILE_UNABLE_TO_OPEN);
 		}
 
-		for (int i = num_persons; i < num_person_total; i++)
+		for (int i = numPersons; i < numPersonTotal; i++)
 		{
 			file << perm[i] << endl;
 		}
@@ -118,7 +121,7 @@ void pri_dataset::init_viper()
 	else
 	{
 		// init for testing
-		num_persons = num_person_total - NUM_PERSON_TRAIN;
+		numPersons = numPersonTotal - NUM_PERSON_TRAIN;
 
 		// load partition for test from file
 		ifstream file(ROOT_PATH + string("cache/testPartition.txt"), ios::in);
@@ -127,7 +130,7 @@ void pri_dataset::init_viper()
 			exit(ERR_FILE_NOT_EXIST);
 		}
 
-		for (int i = 0; i < num_persons; i++)
+		for (int i = 0; i < numPersons; i++)
 		{
 			int		id;
 			file >> id;
@@ -137,24 +140,25 @@ void pri_dataset::init_viper()
 		file.close();
 
 		// load image names according to the partition
-		for (int i = 0; i < num_persons; i++)
+		for (int i = 0; i < numPersons; i++)
 		{
 			vector<int>		personQuery;
 
 			// image 0 for person i
 			sprintf_s(filename, "%03d_00.bmp", perm[i]);
-			filenames.push_back(filename);
+			filenames.push_back(path + string(filename));
 			personQuery.push_back(index);
 			index++;
 
 			// image 1 for person i
 			sprintf_s(filename, "%03d_01.bmp", perm[i]);
-			filenames.push_back(filename);
+			filenames.push_back(path + string(filename));
 			personQuery.push_back(index);
 			index++;
 
-			// push back query indexes for person i
-			query_idx.push_back(personQuery);
+			// push back query indexes for person i, append person id
+			personQuery.push_back(perm[i]);
+			queryIdx.push_back(personQuery);
 		}
 
 	}
@@ -165,10 +169,25 @@ void pri_dataset::init_viper()
 
 int	pri_dataset::num_person()
 {
-	return num_persons;
+	return numPersons;
 }
 
 int	pri_dataset::num_shot()
 {
-	return num_shots;
+	return numShots;
+}
+
+vector<string> pri_dataset::get_filenames()
+{
+	return filenames;
+}
+
+vector<vector<int>> pri_dataset::get_query_index()
+{
+	return queryIdx;
+}
+
+Rect pri_dataset::get_roi()
+{
+	return gROI;
 }

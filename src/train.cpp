@@ -21,11 +21,16 @@
 
 #include "define.h"
 #include "dataset.h"
+#include "feature.h"
 
 
 int	main()
 {
 	pri_dataset		dataset(PHASE_TRAINING);
+	pri_feat		feature;
+
+	feature.init(dataset);
+	feature.extract_feature();
 
 
 

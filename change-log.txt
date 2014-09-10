@@ -3,3 +3,8 @@ CHANGE-LOG
 
 9/9/2014
 - C API deprecated. C++ instead.
+
+9/10/2014
+- Syntax format normalization.
+- Feature class reconstruction. 
+- Bug found: direction upsidedown when HSV value retrieved.
