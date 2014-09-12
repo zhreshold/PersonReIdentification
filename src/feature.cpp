@@ -34,7 +34,30 @@ pri_feat::pri_feat()
 	get_hsv_color_labels(m_hsvColorLabels);
 
 	// load GMM
-	load_gmm(m_gmm);
+	load_gmm();
+}
+
+pri_feat::pri_feat(int	indicator)
+{
+	if (indicator == 1)
+	{
+		// normal init
+		numPersons = 0;
+		numShots = 0;
+
+		// compute hsv color label look-up table
+		get_hsv_color_labels(m_hsvColorLabels);
+
+		// load GMM
+		load_gmm();
+	}
+	else
+	{
+		// init
+		numPersons = 0;
+		numShots = 0;
+	}
+
 }
 
 pri_feat::~pri_feat()
@@ -48,12 +71,8 @@ pri_feat::~pri_feat()
 	ldBuffer.clear();
 	filenames.clear();
 	queryIdx.clear();
-
-	for (int i = 0; i < m_gmm.size(); i++)
-	{
-		vl_gmm_delete(m_gmm[i]);
-	}
-	m_gmm.clear();
+	vl_gmm_delete(m_gmm);
+	m_gmm = NULL;
 }
 
 void pri_feat::init(pri_dataset &dataset)
@@ -80,40 +99,105 @@ void pri_feat::init(pri_dataset &dataset)
 
 }
 
-void pri_feat::load_gmm(vector<VlGMM*> &gmm)
+void pri_feat::init_new_gmm(pri_dataset &dataset)
+{
+	// copy infos from dataset
+	numPersons = dataset.num_person();
+	numShots = dataset.num_shot();
+	filenames = dataset.get_filenames();
+
+	// validation check
+	if (numPersons < 1)
+		exit(ERR_EMPTY_SET);
+	printf("Current # individuals: %d\n", numPersons);
+	printf("Current # image per individual: %d\n", numShots);
+
+
+	// collect local descriptors and train GMM
+	ofstream	file(ROOT_PATH + string("cache/GMM.dat"), ios::out|ios::trunc);
+	if (!file.is_open())
+		exit(ERR_FILE_UNABLE_TO_OPEN);
+
+	// get local descriptors
+	printf("Extracting local descriptors...\n");
+	for (int i = 0; i < filenames.size(); i++)
+	{
+		image = imread(filenames[i], 1);
+		int status = collect_local_descriptors();
+
+		if (status == 1)
+			break;
+	}
+
+	// train GMM
+	printf("Training GMM, be patient...\n");
+	m_gmm = vl_gmm_new(VL_TYPE_FLOAT, LD_DIM, LD_NUM_CLUSTERS);
+	vl_gmm_cluster(m_gmm, ldBuffer.data(), ldBuffer.size()/LD_DIM);
+
+	// save GMM
+	printf("Saving GMM to file...\n");
+	int		gSize = LD_DIM * LD_NUM_CLUSTERS;
+	LDType*	gBuffer;
+
+	// means
+	gBuffer = (LDType*)vl_gmm_get_means(m_gmm);
+	for (int i = 0; i < gSize; i++)
+	{
+		file << gBuffer[i];
+	}
+	file << endl;
+
+	// covariances
+	gBuffer = (LDType*)vl_gmm_get_covariances(m_gmm);
+	for (int i = 0; i < gSize; i++)
+	{
+		file << gBuffer[i];
+	}
+	file << endl;
+
+	// priors
+	gBuffer = (LDType*)vl_gmm_get_priors(m_gmm);
+	for (int i = 0; i < gSize; i++)
+	{
+		file << gBuffer[i];
+	}
+	file << endl;
+
+
+	file.close();
+
+}
+
+void pri_feat::load_gmm()
 {
 	ifstream	file(ROOT_PATH + string("cache/GMM.dat"), ios::in);
 	if (!file.is_open())
 		exit(ERR_FILE_NOT_EXIST);
 
 	vector<LDType>	gBuffer;
-	VlGMM*			gmmPtr;
-	int				numPartition = IMAGE_PARTITION_Y * IMAGE_PARTITION_X;
 	int				gSize = LD_DIM * LD_NUM_CLUSTERS;
 	gBuffer.resize(gSize);
 	//fill(gBuffer.begin(), gBuffer.end(), 0);
 
+	m_gmm = vl_gmm_new(VL_TYPE_FLOAT, LD_DIM, LD_NUM_CLUSTERS);
+
 	// load with means, covariances and priors
-	for (int i = 0; i < numPartition; i++)
+	for (int j = 0; j < gSize; j++)
 	{
-		gmmPtr = vl_gmm_new(VL_TYPE_FLOAT, LD_DIM, LD_NUM_CLUSTERS);
-		gmm.push_back(gmmPtr);
-		for (int j = 0; j < gSize; j++)
-		{
-			file >> gBuffer[j];
-		}
-		vl_gmm_set_means(gmm[i], gBuffer.data());
-		for (int j = 0; j < gSize; j++)
-		{
-			file >> gBuffer[j];
-		}
-		vl_gmm_set_covariances(gmm[i], gBuffer.data());
-		for (int j = 0; j < gSize; j++)
-		{
-			file >> gBuffer[j];
-		}
-		vl_gmm_set_priors(gmm[i], gBuffer.data());
+		file >> gBuffer[j];
 	}
+	vl_gmm_set_means(m_gmm, gBuffer.data());
+	for (int j = 0; j < gSize; j++)
+	{
+		file >> gBuffer[j];
+	}
+	vl_gmm_set_covariances(m_gmm, gBuffer.data());
+	for (int j = 0; j < gSize; j++)
+	{
+		file >> gBuffer[j];
+	}
+	vl_gmm_set_priors(m_gmm, gBuffer.data());
+	
 
 	file.close();
 }
@@ -250,9 +334,7 @@ void pri_feat::rgb2hsv(float r, float g, float b, float &h, float &s, float &v)
 
 
 void pri_feat::extract_feature()
-{
-	Mat					image;
-	Mat					mask;									// foreground mask
+{								
 	int					numel = numPersons * numShots;			// number of images to process
 	vector<FeatureType>	tmpFeat;								// temporal feature buffer
 
@@ -274,7 +356,7 @@ void pri_feat::extract_feature()
 			mask.setTo(1);
 
 			// extract feature
-			extract_feature_image(tmpFeat, image, mask);
+			extract_feature_image(tmpFeat);
 			// push back feature and id
 			imgFeat.push_back(tmpFeat);
 			imgFeatID.push_back(query_person[numShots]);
@@ -285,14 +367,13 @@ void pri_feat::extract_feature()
 }
 
 
-void pri_feat::extract_feature_image(vector<FeatureType> &feat, Mat image, Mat mask)
+void pri_feat::extract_feature_image(vector<FeatureType> &feat)
 {
 	
 	// copy from global ROI
 	Rect				roi = gROI;
 	int					blockHeight, blockWidth;
 	vector<FeatureType>	blockFeatBuffer, imageFeatBuffer;
-	Mat					hsvImage, labImage;
 
 	// calculate block width and height
 	blockHeight = roi.height / IMAGE_PARTITION_Y;
@@ -317,9 +398,12 @@ void pri_feat::extract_feature_image(vector<FeatureType> &feat, Mat image, Mat m
 		exit(ERR_SEE_NOTICE);
 	}
 
-	// convert to HSV color space
+	// convert to various color space
 	cvtColor(image, hsvImage, CV_BGR2HSV);
 	cvtColor(image, labImage, CV_BGR2Lab);
+	cvtColor(image, grayImage, CV_BGR2GRAY);
+
+	feat.clear();
 
 	// extract feature in each block
 	for (int i = 0; i < IMAGE_PARTITION_Y; i++)
@@ -330,30 +414,96 @@ void pri_feat::extract_feature_image(vector<FeatureType> &feat, Mat image, Mat m
 			int		col = roi.x + j * blockWidth;								// block start x
 			Rect	blockROI = Rect(col, row, blockWidth, blockHeight);			// block ROI
 
-			extract_feature_block(blockFeatBuffer, image, hsvImage, labImage, mask, blockROI);
+			extract_feature_block(blockFeatBuffer, blockROI);
+			feat.insert(feat.end(), blockFeatBuffer.begin(), blockFeatBuffer.end());
 		}
 	}
 
 }
 
-void pri_feat::extract_feature_block(vector<FeatureType> &blockFeat, Mat image, Mat hsvImage, Mat labImage, Mat mask, Rect blkROI)
+void pri_feat::get_local_descriptor(int row, int col, vector<LDType> &ldBuffPixel, Mat hsvImage)
+{
+	// boundary check, disabled
+	/*if (row < 1 || row > hsvImage.rows || col < 1 || col > hsvImage.cols)
+	{
+		exit(ERR_OUT_OF_BOUNDARY);
+	}*/
+
+	int			h, s, v;
+	int			hl, ht, hb, hr, sl, st, sb, sr, vl, vt, vb, vr;
+	LDType		val;
+
+	ldBuffPixel.clear();
+
+	h = hsvImage.at<Vec3b>(row, col)[0];
+	s = hsvImage.at<Vec3b>(row, col)[1];
+	v = hsvImage.at<Vec3b>(row, col)[2];
+	hl = hsvImage.at<Vec3b>(row, col - 1)[0];
+	sl = hsvImage.at<Vec3b>(row, col - 1)[1];
+	vl = hsvImage.at<Vec3b>(row, col - 1)[2];
+	ht = hsvImage.at<Vec3b>(row - 1, col)[0];
+	st = hsvImage.at<Vec3b>(row - 1, col)[1];
+	vt = hsvImage.at<Vec3b>(row - 1, col)[2];
+	hr = hsvImage.at<Vec3b>(row, col + 1)[0];
+	sr = hsvImage.at<Vec3b>(row, col + 1)[1];
+	vr = hsvImage.at<Vec3b>(row, col + 1)[2];
+	hb = hsvImage.at<Vec3b>(row + 1, col)[0];
+	sb = hsvImage.at<Vec3b>(row + 1, col)[1];
+	vb = hsvImage.at<Vec3b>(row + 1, col)[2];
+
+	// hue, 1st order, 2nd order
+	val = h / 180.f;
+	ldBuffPixel.push_back(val);
+	val = (hr - h) / 180.f;
+	ldBuffPixel.push_back(val);
+	val = (hb - h) / 180.f;
+	ldBuffPixel.push_back(val);
+	val = (hl + hr - (h << 1)) / 180.f;
+	ldBuffPixel.push_back(val);
+	val = (hb + ht - (h << 1)) / 180.f;
+	ldBuffPixel.push_back(val);
+
+	// saturation, 1st order, 2nd order
+	val = s / 255.f;
+	ldBuffPixel.push_back(val);
+	val = (sr - s) / 255.f;
+	ldBuffPixel.push_back(val);
+	val = (sb - s) / 255.f;
+	ldBuffPixel.push_back(val);
+	val = (sl + sr - (s << 1)) / 255.f;
+	ldBuffPixel.push_back(val);
+	val = (sb + st - (s << 1)) / 255.f;
+	ldBuffPixel.push_back(val);
+
+	// value, 1st order, 2nd order
+	val = v / 255.f;
+	ldBuffPixel.push_back(val);
+	val = (vr - v) / 255.f;
+	ldBuffPixel.push_back(val);
+	val = (vb - v) / 255.f;
+	ldBuffPixel.push_back(val);
+	val = (vl + vr - (v << 1)) / 255.f;
+	ldBuffPixel.push_back(val);
+	val = (vb + vt - (v << 1)) / 255.f;
+	ldBuffPixel.push_back(val);
+
+}
+
+void pri_feat::extract_feature_block(vector<FeatureType> &blockFeat, Rect blkROI)
 {
 	int			r, g, b;
 	int			h, s, v;
 	int			l, a, bb;
-	int			hl, ht, hb, hr, sl, st, sb, sr, vl, vt, vb, vr;
-	LDType		val;
+	//int			hl, ht, hb, hr, sl, st, sb, sr, vl, vt, vb, vr;
+	//LDType		val;
 	int			bin, offset;
 	int			pixelCount = 0;
 
 	// reset buffer for histogram
 	ldBuffer.clear();
 	blockFeat.clear();
-	if (COLOR_LABEL_METHOD == 0)
-		blockFeat.resize(140);
-	else if (COLOR_LABEL_METHOD == 1)
-		blockFeat.resize(144);
-	fill(blockFeat.begin(), blockFeat.end(), 0);
+	blockFeat.resize(128 + COLOR_LABEL_COUNT);
+	std::fill(blockFeat.begin(), blockFeat.end(), 0.f);
 
 	for (int row = blkROI.y; row < blkROI.y + blkROI.height; row++)
 	{
@@ -416,41 +566,16 @@ void pri_feat::extract_feature_block(vector<FeatureType> &blockFeat, Mat image, 
 				r >>= 4;
 				g >>= 4;
 				b >>= 4;
-				bin = m_hsvColorLabels.at(r << 8 + g << 4 + b);
+				bin = m_hsvColorLabels.at((r << 8) + (g << 4) + b);
 				offset += 16;
 				blockFeat.at(bin + offset)++;
 				//------------------------------end histogram------------------------------//
 
 				// ------------------------compute local descriptor------------------------//
 		
-				//retrieve values
-				hl = hsvImage.at<Vec3b>(row, col - 1)[0];
-				sl = hsvImage.at<Vec3b>(row, col - 1)[1];
-				vl = hsvImage.at<Vec3b>(row, col - 1)[2];
-				ht = hsvImage.at<Vec3b>(row - 1, col)[0];
-				st = hsvImage.at<Vec3b>(row - 1, col)[1];
-				vt = hsvImage.at<Vec3b>(row - 1, col)[2];
-				hr = hsvImage.at<Vec3b>(row, col + 1)[0];
-				sr = hsvImage.at<Vec3b>(row, col + 1)[1];
-				vr = hsvImage.at<Vec3b>(row, col + 1)[2];
-				hb = hsvImage.at<Vec3b>(row + 1, col)[0];
-				sb = hsvImage.at<Vec3b>(row + 1, col)[1];
-				vb = hsvImage.at<Vec3b>(row + 1, col)[2];
-
-				// hue, 1st order, 2nd order
-				val = h / 180.0;
-				ldBuffer.push_back(val);
-				val = (hr - h) / 180.0;
-				ldBuffer.push_back(val);
-				val = (hb - h) / 180.0;
-				ldBuffer.push_back(val);
-				val = (hl + hr - h << 1) / 180.0;
-				ldBuffer.push_back(val);
-				val = (hb + ht - h << 1) / 180.0;
-				ldBuffer.push_back(val);
-
-				// saturation, 1st order, 2nd order
-
+				vector<LDType>	ldBuffPixel;
+				get_local_descriptor(row, col, ldBuffPixel, hsvImage);
+				ldBuffer.insert(ldBuffer.end(), ldBuffPixel.begin(), ldBuffPixel.end());
 
 
 				// --------------------------end local descriptor--------------------------//
@@ -459,5 +584,66 @@ void pri_feat::extract_feature_block(vector<FeatureType> &blockFeat, Mat image, 
 			}
 		}
 	}
+
+	// L1-norm color histogram
+	if (pixelCount > 0)
+	{
+		for (vector<FeatureType>::iterator iter = blockFeat.begin(); iter != blockFeat.end(); iter++)
+			*iter /= pixelCount;
+	}
+
+	// add color percent feature
+	int		percentPartition = 5;
+	offset = 128;
+
+	for (int i = 0; i < COLOR_LABEL_COUNT; i++)
+	for (int j = 0; j < 5; j++)
+	{
+		bin = i * percentPartition + j + offset;
+		if (blockFeat.at(bin) > j / (FeatureType)percentPartition)
+			blockFeat.push_back(1);
+		else
+			blockFeat.push_back(0);
+	}
+
+	// LBP feature
+
+
+	// fisher encoder
+	vector<FeatureType> fisherBuffer;
+	fisherBuffer.resize(LD_DIM * LD_NUM_CLUSTERS * 2);
+	fill(fisherBuffer.begin(), fisherBuffer.end(), 0.f);
+	float*		means = (float*)vl_gmm_get_means(m_gmm);
+	vl_fisher_encode(fisherBuffer.data(), VL_TYPE_FLOAT, vl_gmm_get_means(m_gmm), LD_DIM, LD_NUM_CLUSTERS,
+		vl_gmm_get_covariances(m_gmm), vl_gmm_get_priors(m_gmm), ldBuffer.data(), ldBuffer.size() / LD_DIM, VL_FISHER_FLAG_IMPROVED);
+
+	blockFeat.insert(blockFeat.end(), fisherBuffer.begin(), fisherBuffer.end());
 	
+}
+
+
+int	pri_feat::collect_local_descriptors()
+{
+	size_t	maxSize = MAX_VECTOR_SIZE;
+
+	if (image.rows < 1 || image.cols < 1)
+	{
+		exit(ERR_SEE_NOTICE);
+		printf("Invalid access to image, empty or not exist!\n");
+	}
+
+	cvtColor(image, hsvImage, CV_BGR2HSV);
+	vector<LDType> ldBuffPixel;
+
+	for (int row = 1; row < image.rows - 1; row++)
+	for (int col = 1; col < image.cols - 1; col++)
+	{
+		get_local_descriptor(row, col, ldBuffPixel, hsvImage);
+		if (ldBuffer.size() + ldBuffPixel.size() < maxSize)
+			ldBuffer.insert(ldBuffer.end(), ldBuffPixel.begin(), ldBuffPixel.end());
+		else
+			return 1;
+	}
+
+	return 0;
 }

@@ -26,6 +26,16 @@
 
 int	main()
 {
+	// train new model
+	if (NEW_GMM_MODELS)
+	{
+		pri_dataset	wholeDataset(PHASE_COLLECTING);
+		pri_feat	featNewGMM(0);
+
+		featNewGMM.init_new_gmm(wholeDataset);
+	}
+	
+
 	pri_dataset		dataset(PHASE_TRAINING);
 	pri_feat		feature;
 

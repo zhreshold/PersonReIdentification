@@ -33,7 +33,8 @@ extern "C"
 #include <vl/fisher.h>
 }
 
-// color labels definition
+// color labels definition. 
+// note: do not change the starting value 0 or add unsorted value in enum!!
 #define	COLOR_LABEL_METHOD		1
 #if COLOR_LABEL_METHOD == 0
 enum COLOR_LABEL_ENUM
@@ -50,6 +51,7 @@ enum COLOR_LABEL_ENUM
 	COLOR_RED,		
 	COLOR_WHITE,		
 	COLOR_YELLOW
+	COLOR_LABEL_COUNT,
 };	// COLOR_LABEL_METHOD == 0
 #elif COLOR_LABEL_METHOD == 1
 enum COLOR_LABEL_ENUM
@@ -70,6 +72,7 @@ enum COLOR_LABEL_ENUM
 	COLOR_VIOLET,
 	COLOR_MAGENTA,
 	COLOR_ROSE,
+	COLOR_LABEL_COUNT,
 };
 #endif // COLOR_LABEL_METHOD == 1
 
@@ -80,18 +83,20 @@ class pri_feat
 {
 public:
 	pri_feat();
+	pri_feat(int indicator);
 	~pri_feat();
 
 
 	// local functions
-	static void get_hsv_color_labels(vector<UChar> &hsvColorLabels);
-	static void rgb2hsv(float r, float g, float b, float &h, float &s, float &v);
-	static void	load_gmm(vector<VlGMM*> &gmm);
+	static void		get_hsv_color_labels(vector<UChar> &hsvColorLabels);
+	static void		rgb2hsv(float r, float g, float b, float &h, float &s, float &v);
+	static void		get_local_descriptor(int row, int col, vector<LDType> &ldBuffPixel, Mat hsvImage);
 	
 
 	// public functions
-	void init(pri_dataset &dataset);
-	void extract_feature();
+	void	init(pri_dataset &dataset);
+	void	init_new_gmm(pri_dataset &dataset);
+	void	extract_feature();
 
 private:
 	vector<vector<FeatureType>> imgFeat;					// image feature buffer
@@ -99,7 +104,7 @@ private:
 	vector<vector<FeatureType>> pairFeat;					// pairwise feature buffer
 	vector<UChar>				m_hsvColorLabels;			// color labels look-up table in HSV space, 16x16x16 = 4096 dim
 	vector<LDType>				ldBuffer;					// local descriptor buffer
-	vector<VlGMM*>				m_gmm;						// gaussian mixture models 
+	VlGMM*						m_gmm;						// gaussian mixture models 
 
 	int							numPersons;					// number of individuals for current experiment
 	int							numShots;					// number of shots of each individual
@@ -107,10 +112,19 @@ private:
 	vector<vector<int>>			queryIdx;					// index of images used for experiment, DIM = (num_person) x ( num_shots)
 	Rect						gROI;						// global ROI
 
+	// image buffer
+	Mat							image;						// original rgb image
+	Mat							mask;						// image foreground mask
+	Mat							hsvImage;					// hsv image
+	Mat							labImage;					// Lab image
+	Mat							grayImage;					// grayscale image
+
 
 	// private functions
-	void extract_feature_image(vector<FeatureType> &feat, Mat image, Mat mask);
-	void extract_feature_block(vector<FeatureType> &blockFeat, Mat image, Mat hsvImage, Mat labImage, Mat mask, Rect blkROI);
+	void	extract_feature_image(vector<FeatureType> &feat);
+	void	extract_feature_block(vector<FeatureType> &blockFeat, Rect blkROI);
+	int		collect_local_descriptors();
+	void	load_gmm();
 	
 };
 

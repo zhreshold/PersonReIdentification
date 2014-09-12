@@ -118,7 +118,7 @@ void pri_dataset::init_viper()
 		file.close();
 
 	}
-	else
+	else if (m_phase == PHASE_TESTING)
 	{
 		// init for testing
 		numPersons = numPersonTotal - NUM_PERSON_TRAIN;
@@ -161,6 +161,23 @@ void pri_dataset::init_viper()
 			queryIdx.push_back(personQuery);
 		}
 
+	}
+	else
+	{
+		// init for collecting all the feature points
+		numPersons = numPersonTotal;
+
+		// load image names
+		for (int i = 0; i < numPersons; i++)
+		{
+			// image 0 for person i
+			sprintf_s(filename, "%03d_00.bmp", i);
+			filenames.push_back(path + string(filename));
+
+			// image 1 for person i
+			sprintf_s(filename, "%03d_01.bmp", i);
+			filenames.push_back(path + string(filename));
+		}
 	}
 	
 	
