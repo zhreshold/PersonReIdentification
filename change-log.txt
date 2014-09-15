@@ -8,3 +8,8 @@ CHANGE-LOG
 - Syntax format normalization.
 - Feature class reconstruction. 
 - Bug found: direction upsidedown when HSV value retrieved.
+
+9/14/2014
+- Various functions added.
+- Add certain cache files to repo
+- Cleaned up class functions and moved some to utility.cpp
