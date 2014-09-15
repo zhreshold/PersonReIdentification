@@ -66,7 +66,7 @@ typedef	float	LDType;								// local descriptor type
 
 #define	MAX_VECTOR_SIZE			16589934592
 #define	ROOT_PATH				"../../../"
-#define	RANDOM_SEED				7000				// set to fixed number for debug only
+#define	RANDOM_SEED				((int)time(NULL))				// set to fixed number for debug only
 
 
 // datasets to test

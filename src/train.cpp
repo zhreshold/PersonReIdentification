@@ -22,6 +22,7 @@
 #include "define.h"
 #include "dataset.h"
 #include "feature.h"
+#include <iostream>
 
 
 int	main()
@@ -42,9 +43,21 @@ int	main()
 
 
 	feature.init(dataset);
+
+	cout << "Extracting image features..." << endl;
 	feature.extract_feature();
-	feature.save_pairwise_feature();
+
+	cout << "Save pairwise block feature to files..." << endl;
+	feature.save_pairwise_feature_block();
+
+	cout << "Training block-wise SVM models..." << endl;
 	feature.train_block_models();
+
+	cout << "Save pairwise image feature to file..." << endl;
+	feature.save_pairwise_feature_image();
+
+	cout << "Training image SVM model..." << endl;
+	feature.train_image_model();
 
 
 

@@ -13,3 +13,6 @@ CHANGE-LOG
 - Various functions added.
 - Add certain cache files to repo
 - Cleaned up class functions and moved some to utility.cpp
+
+9/15/2014
+- Finished backbone.

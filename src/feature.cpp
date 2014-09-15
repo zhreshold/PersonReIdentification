@@ -22,6 +22,7 @@
 #include "feature.h"
 #include "utility.h"
 #include <fstream>
+#include <numeric>
 
 
 pri_feat::pri_feat()
@@ -75,6 +76,7 @@ pri_feat::~pri_feat()
 	m_gmm = NULL;
 	blockWeights.clear();
 	imageWeights.clear();
+	results.clear();
 }
 
 void pri_feat::init(pri_dataset &dataset)
@@ -705,7 +707,7 @@ int	pri_feat::collect_local_descriptors()
 	return 0;
 }
 
-void pri_feat::save_pairwise_feature()
+void pri_feat::save_pairwise_feature_block()
 {
 	if (imgFeat.size() < 1)
 	{
@@ -792,35 +794,47 @@ void pri_feat::save_pairwise_feature()
 	}
 }
 
+float pri_feat::similarity_score(float f1, float f2)
+{
+	float	val, v1, v2, minVal, maxVal;
+
+	v1 = abs(f1);
+	v2 = abs(f2);
+
+	if (v1 < v2)
+	{
+		minVal = v1;
+		maxVal = v2;
+	}
+	else
+	{
+		minVal = v2;
+		maxVal = v1;
+	}
+
+	if (maxVal == 0 || minVal == 0)
+		val = 0;
+	else
+	{
+		val = minVal / maxVal;
+	}
+
+	return val;
+}
+
 
 void pri_feat::write_similarity_to_file(ofstream &file, vector<FeatureType> f1, vector<FeatureType> f2)
 {
 	if (f1.size() != f2.size())
 		return;
 
-	float		val, v1, v2;
-	FeatureType minVal, maxVal;
+	float		val;
 	for (int i = 0; i < f1.size(); i++)
 	{
-		v1 = abs(f1[i]);
-		v2 = abs(f2[i]);
+		val = similarity_score(f1[i], f2[i]);
 
-		if (v1 < v2)
+		if ( val != 0)
 		{
-			minVal = v1;
-			maxVal = v2;
-		}
-		else
-		{
-			minVal = v2;
-			maxVal = v1;
-		}
-
-		if (maxVal == 0 || minVal == 0)
-			val = 0;
-		else
-		{
-			val = (float)((float)minVal / maxVal);
 			file << i+1 << ":" << val << " ";
 		}
 	}
@@ -859,9 +873,26 @@ void pri_feat::train_block_models()
 	}
 }
 
+void pri_feat::train_image_model()
+{
+	// call external exe to train SVM model
+	char	filename[260];
+	char	modelname[260];
+	string	exePath = ROOT_PATH + string("resource/");
+	string	exeFile = string("ranksvm64.exe");
+
+	sprintf(filename, "../cache/image.trdat");
+	sprintf(modelname, "../cache/image.model");
+	char	systemcall[2048];
+	sprintf(systemcall, "cd /d %s && %s %s %s", exePath.c_str(), exeFile.c_str(), filename, modelname);
+	system(systemcall);
+}
+
 
 void pri_feat::load_block_weights()
 {
+	blockWeights.clear();
+
 	if (USE_UNIFIED_MODEL)
 	{
 
@@ -910,4 +941,260 @@ void pri_feat::load_block_weights()
 			blockWeights.push_back(weights);
 		}
 	}
+}
+
+void pri_feat::load_image_weights()
+{
+	imageWeights.clear();
+
+	char		filename[260];
+	sprintf(filename, "cache/image.model");
+	ifstream	file(ROOT_PATH + string(filename), ios::in);
+	if (!file.is_open())
+		exit(ERR_FILE_UNABLE_TO_OPEN);
+
+	string	line = "";
+	int		featLen = 0;
+
+	while (line != "w")
+	{
+		getline(file, line);
+
+		// try to get the feature length
+		if (line.substr(0, 10) == "nr_feature")
+			featLen = stoi(line.substr(11, line.size() - 11));
+	}
+
+	if (featLen < 1)
+	{
+		printf("Error feature length detected!\n");
+		exit(ERR_SEE_NOTICE);
+	}
+
+	// temporal weights vector
+	for (int j = 0; j < featLen; j++)
+	{
+		float	buf;
+		file >> buf;
+		imageWeights.push_back(buf);
+	}
+
+	file.close();
+
+}
+
+void pri_feat::save_pairwise_feature_image()
+{
+	// validation check
+	if (imgFeat.size() < 1)
+	{
+		return;
+	}
+
+	load_block_weights();
+	create_pair_index();
+
+	if (blockWeights.size() < 1)
+	{
+		return;
+	}
+
+	const int	numPartitions = IMAGE_PARTITION_Y * IMAGE_PARTITION_X;
+	size_t		featLen = imgFeat[0].size() / numPartitions;
+
+	if (blockWeights[0].size() != featLen)
+	{
+		printf("Load weights length mismatch!\n");
+		exit(ERR_SEE_NOTICE);
+	}
+
+	if (pairIdxIntra.size() < 1 || pairIdxInter.size() < 1)
+		create_pair_index();
+
+	// calculate similarities and write to file
+	ofstream	file(ROOT_PATH + string("cache/image.trdat"), ios::out | ios::trunc);
+	if (!file.is_open())
+		exit(ERR_FILE_UNABLE_TO_OPEN);
+
+	// intra pairs first
+	for (int i = 0; i < pairIdxIntra.size(); i++)
+	{
+		vector<float>	combFeat;
+		get_combine_image_feature(combFeat, imgFeat[pairIdxIntra[i][0]], imgFeat[pairIdxIntra[i][1]]);
+		file << 1 << "\t";		// intra label 1
+		for (int j = 0; j < combFeat.size(); j++)
+			file << j + 1 << ":" << combFeat[j] << " ";
+		file << endl;
+	}
+
+	// then inter pairs
+	for (int i = 0; i < pairIdxInter.size(); i++)
+	{
+		vector<float>	combFeat;
+		get_combine_image_feature(combFeat, imgFeat[pairIdxInter[i][0]], imgFeat[pairIdxInter[i][1]]);
+		file << -1 << "\t";		// inter label -1
+		for (int j = 0; j < combFeat.size(); j++)
+			file << j + 1 << ":" << combFeat[j] << " ";
+		file << endl;
+	}
+
+	file.close();
+}
+
+void pri_feat::get_combine_image_feature(vector<FeatureType> & combFeat, vector<FeatureType> f1, vector<FeatureType> f2)
+{
+	const int numBlocks = IMAGE_PARTITION_Y * IMAGE_PARTITION_X;
+
+	// size check
+	if (f1.size() != f2.size())
+		return;
+
+	// reset
+	combFeat.clear();
+
+	
+	if (blockWeights.size() == 1 && USE_UNIFIED_MODEL)
+	{
+		// duplicate weights
+		vector<float>	weights = blockWeights[0];
+		for (int i = 1; i < numBlocks; i++)
+			blockWeights.push_back(weights);
+	}
+	else if (blockWeights.size() > 1)
+	{
+		if (blockWeights.size() != numBlocks)
+			exit(ERR_SIZE_MISMATCH);
+	}
+	else
+	{
+		printf("Error: block weights size invalid!\n");
+		exit(ERR_SEE_NOTICE);
+	}
+
+	size_t	featLen = blockWeights[0].size();
+	if (featLen * numBlocks != f1.size())
+		exit(ERR_SIZE_MISMATCH);
+
+	// basic block similarity
+	int		featPtr = 0;
+	for (int i = 0; i < numBlocks; i++)
+	{
+		float	sim = 0;
+		for (int j = 0; j < featLen; j++)
+		{
+			sim += blockWeights[i][j] * similarity_score((float)f1[featPtr], (float)f2[featPtr]);
+			featPtr++;
+		}
+		combFeat.push_back(sim);
+	}
+
+	// try some combination
+	// combination of two blocks
+	for (int i = 0; i < numBlocks; i++)
+	for (int j = i + IMAGE_PARTITION_X; j < numBlocks; j += IMAGE_PARTITION_X)
+	{
+		float	sim = (combFeat[i] + combFeat[j]) / 2;
+		combFeat.push_back(sim);
+	}
+	// combination of three blocks
+	for (int i = 0; i < numBlocks; i++)
+	for (int j = i + IMAGE_PARTITION_X; j < numBlocks; j += IMAGE_PARTITION_X)
+	for (int k = j + IMAGE_PARTITION_X; k < numBlocks; k += IMAGE_PARTITION_X)
+	{
+		float	sim = (combFeat[i] + combFeat[j] + combFeat[k]) / 3;
+		combFeat.push_back(sim);
+	}
+	
+}
+
+
+float pri_feat::image_pairwise_score(int idx1, int idx2)
+{
+
+	// init
+	if (blockWeights.size() < 1)
+		load_block_weights();
+
+	if (imageWeights.size() < 1)
+		load_image_weights();
+
+	if (blockWeights.size() < 1 || imageWeights.size() < 1)
+	{
+		printf("Error: SVM model weights invalid!\n");
+		exit(ERR_SEE_NOTICE);
+	}
+
+	
+	vector<float>	combFeat;
+
+	// get lower level score
+	get_combine_image_feature(combFeat, imgFeat[idx1], imgFeat[idx2]);
+
+	float	score = 0;
+	for (int i = 0; i < imageWeights.size(); i++)
+		score += combFeat[i] * imageWeights[i];
+
+	return score;
+
+}
+
+void pri_feat::rank_cmc()
+{
+	results.clear();
+	ranks.clear();
+	ranks.resize(numPersons);
+	fill(ranks.begin(), ranks.end(), 0.f);
+
+	if (imgFeat.size() < 1)
+		return;
+
+	for (int i = 0; i < numPersons; i++)
+	{
+		vector<sort_descend> search;
+		int	qIdx = queryIdx[i][0];		// use the first image in each query
+		for (int j = 0; j < numPersons; j++)
+		for (int k = 1; k < numShots; k++)
+		{
+			int		gIdx = queryIdx[j][k];	// gallery index
+			float	score = image_pairwise_score(qIdx, gIdx);
+			sort_descend sort;
+			sort.score = score;
+			sort.id = imgFeatID[gIdx];
+			search.push_back(sort);
+		}
+
+		// sort according to the scores
+		sort(search.begin(), search.end());
+		results.push_back(search);
+	}
+
+	// statistic rank info
+	for (int i = 0; i < numPersons; i++)
+	{
+		int	qId = queryIdx[i][numShots];	// query image ID
+		int	rank = numPersons-1;
+		for (int j = 0; j < results[i].size(); j++)
+		{
+			if (qId == results[i][j].id)
+			{
+				rank = j;
+				break;
+			}
+		}
+		ranks[rank]++;
+	}
+
+	// get percentage
+	for (int i = 0; i < ranks.size(); i++)
+		ranks[i] /= numPersons;
+
+	// get cumulative sum
+	vector<float> tmp = ranks;
+	std::partial_sum(tmp.begin(), tmp.end(), ranks.begin(), plus<float>());
+}
+
+float pri_feat::get_rank_n(int n)
+{
+	// n = n - 1 to fit the structure
+	return ranks[n - 1];
 }

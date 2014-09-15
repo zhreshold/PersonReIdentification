@@ -79,6 +79,15 @@ enum COLOR_LABEL_ENUM
 using namespace std;
 using namespace cv;
 
+struct sort_descend
+{
+	float	score;
+	int		id;
+
+	// overload comparison function to descend order
+	bool operator < (sort_descend &s) const { return score > s.score; }
+};
+
 class pri_feat
 {
 public:
@@ -90,11 +99,14 @@ public:
 	void	init(pri_dataset &dataset);
 	void	init_new_gmm(pri_dataset &dataset);
 	void	extract_feature();
-	void	save_pairwise_feature();						// save pair-wise feature to files
+	void	save_pairwise_feature_block();						// save pair-wise feature to files
+	void	save_pairwise_feature_image();						// save combined block feature as image feature
 	void	train_block_models();
 	void	load_block_weights();
 	void	train_image_model();
 	void	load_image_weights();
+	void	rank_cmc();
+	float	get_rank_n(int n);							// return the n-th rank
 
 private:
 	vector<vector<FeatureType>> imgFeat;					// image feature buffer
@@ -121,6 +133,10 @@ private:
 	Mat							labImage;					// Lab image
 	Mat							grayImage;					// grayscale image
 
+	// sort results for matching
+	vector<vector<sort_descend>> results;					// stores sorted results for matching
+	vector<float>				ranks;						// store ranks;
+
 
 	// private functions
 	void	get_hsv_color_labels();					// compute HSV color label look-up table
@@ -130,7 +146,12 @@ private:
 	void	load_gmm();																// load trained GMMs
 	void	create_pair_index();													// create pairs index table
 	void	get_local_descriptor(int row, int col, vector<LDType> &ldBuffPixel);	// collect local descriptors
+
+	// similarity functions
+	float	similarity_score(float f1, float f2);
 	void	write_similarity_to_file(ofstream &file, vector<FeatureType> f1, vector<FeatureType> f2);	// write similarity to file
+	void	get_combine_image_feature(vector<FeatureType> & combFeat, vector<FeatureType> f1, vector<FeatureType> f2);
+	float	image_pairwise_score(int idx1, int idx2);
 	
 	
 	
