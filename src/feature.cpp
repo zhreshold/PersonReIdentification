@@ -20,7 +20,7 @@
 /***********************************************************************/
 
 #include "feature.h"
-#include <algorithm>
+#include "utility.h"
 #include <fstream>
 
 
@@ -31,7 +31,7 @@ pri_feat::pri_feat()
 	numShots = 0;
 
 	// compute hsv color label look-up table
-	get_hsv_color_labels(m_hsvColorLabels);
+	get_hsv_color_labels();
 
 	// load GMM
 	load_gmm();
@@ -46,7 +46,7 @@ pri_feat::pri_feat(int	indicator)
 		numShots = 0;
 
 		// compute hsv color label look-up table
-		get_hsv_color_labels(m_hsvColorLabels);
+		get_hsv_color_labels();
 
 		// load GMM
 		load_gmm();
@@ -73,6 +73,8 @@ pri_feat::~pri_feat()
 	queryIdx.clear();
 	vl_gmm_delete(m_gmm);
 	m_gmm = NULL;
+	blockWeights.clear();
+	imageWeights.clear();
 }
 
 void pri_feat::init(pri_dataset &dataset)
@@ -129,6 +131,8 @@ void pri_feat::init_new_gmm(pri_dataset &dataset)
 			break;
 	}
 
+	printf("Total # pixels extracted: %d\n", ldBuffer.size() / LD_DIM);
+
 	// train GMM
 	printf("Training GMM, be patient...\n");
 	m_gmm = vl_gmm_new(VL_TYPE_FLOAT, LD_DIM, LD_NUM_CLUSTERS);
@@ -143,7 +147,7 @@ void pri_feat::init_new_gmm(pri_dataset &dataset)
 	gBuffer = (LDType*)vl_gmm_get_means(m_gmm);
 	for (int i = 0; i < gSize; i++)
 	{
-		file << gBuffer[i];
+		file << gBuffer[i] << "\t";
 	}
 	file << endl;
 
@@ -151,7 +155,7 @@ void pri_feat::init_new_gmm(pri_dataset &dataset)
 	gBuffer = (LDType*)vl_gmm_get_covariances(m_gmm);
 	for (int i = 0; i < gSize; i++)
 	{
-		file << gBuffer[i];
+		file << gBuffer[i] << "\t";
 	}
 	file << endl;
 
@@ -159,7 +163,7 @@ void pri_feat::init_new_gmm(pri_dataset &dataset)
 	gBuffer = (LDType*)vl_gmm_get_priors(m_gmm);
 	for (int i = 0; i < gSize; i++)
 	{
-		file << gBuffer[i];
+		file << gBuffer[i] << "\t";
 	}
 	file << endl;
 
@@ -203,16 +207,16 @@ void pri_feat::load_gmm()
 }
 
 
-void pri_feat::get_hsv_color_labels(vector<UChar> &hsvColorLabels)
+void pri_feat::get_hsv_color_labels()
 {
 	int			vr, vg, vb;
 	float		r, g, b, h, s, v;
 	int			CL;		
 
 	// init look-up  table
-	hsvColorLabels.clear();
-	hsvColorLabels.resize(4096);
-	fill(hsvColorLabels.begin(), hsvColorLabels.end(), 0);
+	m_hsvColorLabels.clear();
+	m_hsvColorLabels.resize(4096);
+	fill(m_hsvColorLabels.begin(), m_hsvColorLabels.end(), 0);
 
 	for (r = 0; r < 256; r += 16)
 	for (g = 0; g < 256; g += 16)
@@ -303,34 +307,87 @@ void pri_feat::get_hsv_color_labels(vector<UChar> &hsvColorLabels)
 		vr = (int)r / 16;
 		vg = (int)g / 16;
 		vb = (int)b / 16;
-		hsvColorLabels[vr * 256 + vg * 16 + vb] = CL;
+		m_hsvColorLabels[vr * 256 + vg * 16 + vb] = CL;
 
 	}
 }
 
-void pri_feat::rgb2hsv(float r, float g, float b, float &h, float &s, float &v)
+
+
+void pri_feat::create_pair_index()
 {
-	// fast version converter
+	int		numIntraPerPerson = get_combination(2, numShots);
+	int		numInterPerPerson = numIntraPerPerson * SVM_NEG_POS_RATIO;
+	if (numInterPerPerson > numPersons - 1)
+		numInterPerPerson = numPersons - 1;
 
-	float K = 0.f;
+	// clean up
+	pairIdxIntra.clear();
+	pairIdxInter.clear();
 
-	if (g < b)
+	// intra pairs first
+	for (int i = 0; i < numPersons; i++)
 	{
-		std::swap(g, b);
-		K = -1.f;
+		for (int p1 = 0; p1 < numShots; p1++)
+		for (int p2 = p1 + 1; p2 < numShots; p2++)
+		{
+			int	idx1 = queryIdx[i][p1];
+			int	idx2 = queryIdx[i][p2];
+			vector<int> idxIntra;
+			idxIntra.push_back(idx1);
+			idxIntra.push_back(idx2);
+			pairIdxIntra.push_back(idxIntra);
+		}
 	}
 
-	if (r < g)
+	// inter pairs
+	vector<int>		permIn, permOut;
+	for (int i = 0; i < numPersons; i++)
 	{
-		std::swap(r, g);
-		K = -2.f / 6.f - K;
+		permOut.push_back(i);
+	}
+	for (int i = 0; i < numShots; i++)
+	{
+		permIn.push_back(i);
 	}
 
-	float chroma = r - std::min(g, b);
-	h = fabs(K + (g - b) / (6.f * chroma + 1e-20f));
-	s = chroma / (r + 1e-20f);
-	v = r;
+	srand(RANDOM_SEED);
+	for (int i = 0; i < numPersons; i++)
+	{
+		random_shuffle(permOut.begin(), permOut.end());
+
+		vector<int>	tmpPermOut = permOut;
+		// excluse self
+		for (vector<int>::iterator j = tmpPermOut.begin(); j != tmpPermOut.end(); j++)
+		{
+			if (*j == i)
+			{
+				tmpPermOut.erase(j);
+				break;
+			}
+		}
+
+		for (int k = 0; k < numInterPerPerson; k++)
+		{
+
+			// pick up randomly inside class
+			random_shuffle(permIn.begin(), permIn.end());
+			int		idx1 = queryIdx[i][permIn[0]];
+
+			// shuffle again
+			random_shuffle(permIn.begin(), permIn.end());
+			int		idx2 = queryIdx[tmpPermOut[k]][permIn[0]];
+
+			// push back
+			vector<int> idxInter;
+			idxInter.push_back(idx1);
+			idxInter.push_back(idx2);
+			pairIdxInter.push_back(idxInter);
+		}
+
+	}
 }
+
 
 
 void pri_feat::extract_feature()
@@ -421,7 +478,7 @@ void pri_feat::extract_feature_image(vector<FeatureType> &feat)
 
 }
 
-void pri_feat::get_local_descriptor(int row, int col, vector<LDType> &ldBuffPixel, Mat hsvImage)
+void pri_feat::get_local_descriptor(int row, int col, vector<LDType> &ldBuffPixel)
 {
 	// boundary check, disabled
 	/*if (row < 1 || row > hsvImage.rows || col < 1 || col > hsvImage.cols)
@@ -574,7 +631,7 @@ void pri_feat::extract_feature_block(vector<FeatureType> &blockFeat, Rect blkROI
 				// ------------------------compute local descriptor------------------------//
 		
 				vector<LDType>	ldBuffPixel;
-				get_local_descriptor(row, col, ldBuffPixel, hsvImage);
+				get_local_descriptor(row, col, ldBuffPixel);
 				ldBuffer.insert(ldBuffer.end(), ldBuffPixel.begin(), ldBuffPixel.end());
 
 
@@ -638,7 +695,7 @@ int	pri_feat::collect_local_descriptors()
 	for (int row = 1; row < image.rows - 1; row++)
 	for (int col = 1; col < image.cols - 1; col++)
 	{
-		get_local_descriptor(row, col, ldBuffPixel, hsvImage);
+		get_local_descriptor(row, col, ldBuffPixel);
 		if (ldBuffer.size() + ldBuffPixel.size() < maxSize)
 			ldBuffer.insert(ldBuffer.end(), ldBuffPixel.begin(), ldBuffPixel.end());
 		else
@@ -646,4 +703,211 @@ int	pri_feat::collect_local_descriptors()
 	}
 
 	return 0;
+}
+
+void pri_feat::save_pairwise_feature()
+{
+	if (imgFeat.size() < 1)
+	{
+		return;
+	}
+
+	create_pair_index();
+
+	const int	numPartitions = IMAGE_PARTITION_Y * IMAGE_PARTITION_X;
+	size_t		featLen = imgFeat[0].size() / numPartitions;
+	string		path = ROOT_PATH + string("cache/");
+
+	if (USE_UNIFIED_MODEL)
+	{
+
+	}
+	else
+	{
+		vector<ofstream> fileList;
+		fileList.resize(numPartitions);
+		char filename[260];
+
+		// open files to write
+		for (int i = 0; i < numPartitions; i++)
+		{
+			sprintf(filename, "train_%d.dat", i);
+			fileList[i].open(path + filename, ios::out | ios::trunc);
+			if (!fileList[i].is_open())
+				exit(ERR_FILE_UNABLE_TO_OPEN);
+		}
+
+
+		// intra pairs first
+		for (int i = 0; i < pairIdxIntra.size(); i++)
+		{
+			// switch regions to operate
+			for (int k = 0; k < numPartitions; k++)
+			{
+				// feature range
+				vector<FeatureType>::iterator	startIter = imgFeat[pairIdxIntra[i][0]].begin() + featLen * k;
+				vector<FeatureType>::iterator	endIter = startIter + featLen;
+
+				// partial feature
+				vector<FeatureType> f1(startIter, endIter);
+				startIter = imgFeat[pairIdxIntra[i][1]].begin() + featLen * k;
+				endIter = startIter + featLen;
+				vector<FeatureType> f2(startIter, endIter);
+
+
+				// write pairwise feature to file
+				fileList[k] << 1 << "\t";									// intra pair label = 1
+				write_similarity_to_file(fileList[k], f1, f2);
+			}
+		}
+
+		// then inter pairs
+		for (int i = 0; i < pairIdxInter.size(); i++)
+		{
+			// switch regions to operate
+			for (int k = 0; k < numPartitions; k++)
+			{
+				// feature range
+				vector<FeatureType>::iterator	startIter = imgFeat[pairIdxInter[i][0]].begin() + featLen * k;
+				vector<FeatureType>::iterator	endIter = startIter + featLen;
+
+				// partial feature
+				vector<FeatureType> f1(startIter, endIter);
+				startIter = imgFeat[pairIdxInter[i][1]].begin() + featLen * k;
+				endIter = startIter + featLen;
+				vector<FeatureType> f2(startIter, endIter);
+
+
+				// write pairwise feature to file
+				fileList[k] << -1 << "\t";									// inter pair label = 0
+				write_similarity_to_file(fileList[k], f1, f2);
+			}
+		}
+
+		// close files
+		for (int i = 0; i < numPartitions; i++)
+		{
+			fileList[i].close();
+		}
+	}
+}
+
+
+void pri_feat::write_similarity_to_file(ofstream &file, vector<FeatureType> f1, vector<FeatureType> f2)
+{
+	if (f1.size() != f2.size())
+		return;
+
+	float		val, v1, v2;
+	FeatureType minVal, maxVal;
+	for (int i = 0; i < f1.size(); i++)
+	{
+		v1 = abs(f1[i]);
+		v2 = abs(f2[i]);
+
+		if (v1 < v2)
+		{
+			minVal = v1;
+			maxVal = v2;
+		}
+		else
+		{
+			minVal = v2;
+			maxVal = v1;
+		}
+
+		if (maxVal == 0 || minVal == 0)
+			val = 0;
+		else
+		{
+			val = (float)((float)minVal / maxVal);
+			file << i+1 << ":" << val << " ";
+		}
+	}
+
+	// if the last element is 0, write it to maintain the proper size
+	if (val == 0)
+		file << f1.size() << ":" << val << " ";
+
+	file << endl;		// write end of line
+}
+
+
+void pri_feat::train_block_models()
+{
+	// call external exe to train SVM models
+	char	filename[260];
+	char	modelname[260];
+	string	exePath = ROOT_PATH + string("resource/");
+	string	exeFile = string("ranksvm64.exe");
+
+	if (USE_UNIFIED_MODEL)
+	{
+
+	}
+	else
+	{
+		const int	numPartitions = IMAGE_PARTITION_Y * IMAGE_PARTITION_X;
+		for (int i = 0; i < numPartitions; i++)
+		{
+			sprintf(filename, "../cache/train_%d.dat", i);
+			sprintf(modelname, "../cache/train_%d.model", i);
+			char	systemcall[2048];
+			sprintf(systemcall, "cd /d %s && %s %s %s", exePath.c_str(), exeFile.c_str(), filename, modelname);
+			system(systemcall);
+		}
+	}
+}
+
+
+void pri_feat::load_block_weights()
+{
+	if (USE_UNIFIED_MODEL)
+	{
+
+	}
+	else
+	{
+		const int	numPartitions = IMAGE_PARTITION_Y * IMAGE_PARTITION_X;
+		for (int i = 0; i < numPartitions; i++)
+		{
+			char		filename[260];
+			sprintf(filename, "cache/train_%d.model", i);
+			ifstream	file(ROOT_PATH + string(filename), ios::in);
+			if (!file.is_open())
+				exit(ERR_FILE_UNABLE_TO_OPEN);
+
+			string	line = "";
+			int		featLen = 0;
+
+			while (line != "w")
+			{
+				getline(file, line);
+
+				// try to get the feature length
+				if (line.substr(0, 10) == "nr_feature")
+					featLen = stoi(line.substr(11, line.size() - 11));
+			}
+
+			if (featLen < 1)
+			{
+				printf("Error feature length detected!\n");
+				exit(ERR_SEE_NOTICE);
+			}
+
+			// temporal weights vector
+			vector<float>	weights;
+			for (int j = 0; j < featLen; j++)
+			{
+				float	buf;
+				file >> buf;
+				weights.push_back(buf);
+			}
+
+			file.close();
+
+			// push back to 2-D vector
+			blockWeights.push_back(weights);
+		}
+	}
 }

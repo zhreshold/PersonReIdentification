@@ -86,17 +86,15 @@ public:
 	pri_feat(int indicator);
 	~pri_feat();
 
-
-	// local functions
-	static void		get_hsv_color_labels(vector<UChar> &hsvColorLabels);
-	static void		rgb2hsv(float r, float g, float b, float &h, float &s, float &v);
-	static void		get_local_descriptor(int row, int col, vector<LDType> &ldBuffPixel, Mat hsvImage);
-	
-
 	// public functions
 	void	init(pri_dataset &dataset);
 	void	init_new_gmm(pri_dataset &dataset);
 	void	extract_feature();
+	void	save_pairwise_feature();						// save pair-wise feature to files
+	void	train_block_models();
+	void	load_block_weights();
+	void	train_image_model();
+	void	load_image_weights();
 
 private:
 	vector<vector<FeatureType>> imgFeat;					// image feature buffer
@@ -104,13 +102,17 @@ private:
 	vector<vector<FeatureType>> pairFeat;					// pairwise feature buffer
 	vector<UChar>				m_hsvColorLabels;			// color labels look-up table in HSV space, 16x16x16 = 4096 dim
 	vector<LDType>				ldBuffer;					// local descriptor buffer
-	VlGMM*						m_gmm;						// gaussian mixture models 
+	VlGMM*						m_gmm;						// gaussian mixture models
+	vector<vector<float>>		blockWeights;				// block-wise SVM weights, DIM = (numBlocks x dim) or ( 1 x dim) if use unified model
+	vector<float>				imageWeights;				// image-wise SVM weights
 
 	int							numPersons;					// number of individuals for current experiment
 	int							numShots;					// number of shots of each individual
 	vector<string>				filenames;					// image lists
 	vector<vector<int>>			queryIdx;					// index of images used for experiment, DIM = (num_person) x ( num_shots)
 	Rect						gROI;						// global ROI
+	vector<vector<int>>			pairIdxIntra;				// intra pairs index table, DIM = (numIntraPairs) x 2
+	vector<vector<int>>			pairIdxInter;				// inter pairs index table
 
 	// image buffer
 	Mat							image;						// original rgb image
@@ -121,10 +123,16 @@ private:
 
 
 	// private functions
-	void	extract_feature_image(vector<FeatureType> &feat);
-	void	extract_feature_block(vector<FeatureType> &blockFeat, Rect blkROI);
-	int		collect_local_descriptors();
-	void	load_gmm();
+	void	get_hsv_color_labels();					// compute HSV color label look-up table
+	void	extract_feature_image(vector<FeatureType> &feat);						// image-wise feature
+	void	extract_feature_block(vector<FeatureType> &blockFeat, Rect blkROI);		// block-wise feature
+	int		collect_local_descriptors();											// collect local descriptor for GMMs
+	void	load_gmm();																// load trained GMMs
+	void	create_pair_index();													// create pairs index table
+	void	get_local_descriptor(int row, int col, vector<LDType> &ldBuffPixel);	// collect local descriptors
+	void	write_similarity_to_file(ofstream &file, vector<FeatureType> f1, vector<FeatureType> f2);	// write similarity to file
+	
+	
 	
 };
 

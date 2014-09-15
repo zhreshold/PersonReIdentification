@@ -64,7 +64,7 @@ enum MODULE_PHASE
 typedef	float	FeatureType;						// final feature type
 typedef	float	LDType;								// local descriptor type
 
-#define	MAX_VECTOR_SIZE			8589934592
+#define	MAX_VECTOR_SIZE			16589934592
 #define	ROOT_PATH				"../../../"
 #define	RANDOM_SEED				7000				// set to fixed number for debug only
 
@@ -83,7 +83,11 @@ enum DATASET_TYPES
 // local descriptor & GMM model
 #define	LD_DIM					15					// local descriptor dimension
 #define	LD_NUM_CLUSTERS			30					// number of GMM clusters
-#define	NEW_GMM_MODELS			1					// 1: train new models, 0: use existed models
+#define	NEW_GMM_MODELS			0					// 1: train new models, 0: use existed models
+
+// SVM
+#define	USE_UNIFIED_MODEL		0					// 1: use single model for all regions, 0: use seperate models
+#define	SVM_NEG_POS_RATIO		5					// maximum ratio of negtive/positive samples
 
 /****************************************************************/
 

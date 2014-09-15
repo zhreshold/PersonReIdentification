@@ -34,13 +34,18 @@ int	main()
 
 		featNewGMM.init_new_gmm(wholeDataset);
 	}
-	
+	//system("pause");
+	//return(0);
 
 	pri_dataset		dataset(PHASE_TRAINING);
 	pri_feat		feature;
 
+	feature.load_block_weights();
+
 	feature.init(dataset);
 	feature.extract_feature();
+	feature.save_pairwise_feature();
+	feature.train_block_models();
 
 
 

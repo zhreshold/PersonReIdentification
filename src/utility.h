@@ -1,10 +1,10 @@
 /***********************************************************************/
 /*
-/*   Script File: test.cpp
+/*   Script File: utility.h
 /*
 /*   Description:
 /*
-/*   Main for testing module
+/*   Helpful utility functions header
 /*
 /*
 /*   Author: Joshua Zhang
@@ -19,19 +19,16 @@
 /*
 /***********************************************************************/
 
-#include "define.h"
-#include "dataset.h"
-#include "feature.h"
+#ifndef _UTILITY_H_
+#define _UTILITY_H_
+
+// functions
+
+void	rgb2hsv(float r, float g, float b, float &h, float &s, float &v);
+int		get_combination(int m, int n);
 
 
-int	main()
-{
-	pri_dataset		dataset(PHASE_TESTING);
-	pri_feat		feature;
-
-	feature.init(dataset);
-	feature.extract_feature();
+#endif // !_UTILITY_H_
 
 
-	system("pause");
-}
+
