@@ -40,7 +40,6 @@ int	main()
 	pri_dataset		dataset(PHASE_TRAINING);
 	pri_feat		feature;
 
-	feature.load_block_weights();
 
 	feature.init(dataset);
 	feature.extract_feature();

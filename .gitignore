@@ -2,9 +2,8 @@
 ## User Defined
 ################
 lib/
-cache/
 data/
-
+*.trdat
 
 
 

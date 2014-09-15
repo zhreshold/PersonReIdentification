@@ -731,7 +731,7 @@ void pri_feat::save_pairwise_feature()
 		// open files to write
 		for (int i = 0; i < numPartitions; i++)
 		{
-			sprintf(filename, "train_%d.dat", i);
+			sprintf(filename, "block_%d.trdat", i);
 			fileList[i].open(path + filename, ios::out | ios::trunc);
 			if (!fileList[i].is_open())
 				exit(ERR_FILE_UNABLE_TO_OPEN);
@@ -850,8 +850,8 @@ void pri_feat::train_block_models()
 		const int	numPartitions = IMAGE_PARTITION_Y * IMAGE_PARTITION_X;
 		for (int i = 0; i < numPartitions; i++)
 		{
-			sprintf(filename, "../cache/train_%d.dat", i);
-			sprintf(modelname, "../cache/train_%d.model", i);
+			sprintf(filename, "../cache/block_%d.trdat", i);
+			sprintf(modelname, "../cache/block_%d.model", i);
 			char	systemcall[2048];
 			sprintf(systemcall, "cd /d %s && %s %s %s", exePath.c_str(), exeFile.c_str(), filename, modelname);
 			system(systemcall);
@@ -872,7 +872,7 @@ void pri_feat::load_block_weights()
 		for (int i = 0; i < numPartitions; i++)
 		{
 			char		filename[260];
-			sprintf(filename, "cache/train_%d.model", i);
+			sprintf(filename, "cache/block_%d.model", i);
 			ifstream	file(ROOT_PATH + string(filename), ios::in);
 			if (!file.is_open())
 				exit(ERR_FILE_UNABLE_TO_OPEN);
