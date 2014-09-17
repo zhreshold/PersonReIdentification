@@ -67,7 +67,7 @@ typedef	float	LDType;								// local descriptor type
 #define	MAX_VECTOR_SIZE			16589934592
 #define	ROOT_PATH				"../../../"
 #define	RANDOM_SEED				((int)time(NULL))				// set to fixed number for debug only
-
+#define	DEV_DEBUG				0
 
 // datasets to test
 enum DATASET_TYPES
@@ -77,7 +77,8 @@ enum DATASET_TYPES
 #define	DATASET_TYPE			VIPER				// VIPER, CUHK01...
 #define	NUM_PERSON_TRAIN		316					// number of individuals used for train
 #define	IMAGE_PARTITION_X		1					// number of partitions along x
-#define	IMAGE_PARTITION_Y		6					// number of partitions along y
+#define	IMAGE_PARTITION_Y		10					// number of partitions along y
+#define	PARTITION_OVERLAP		0.5					// percentage of overlapping
 
 
 // local descriptor & GMM model
@@ -86,8 +87,8 @@ enum DATASET_TYPES
 #define	NEW_GMM_MODELS			0					// 1: train new models, 0: use existed models
 
 // SVM
-#define	USE_UNIFIED_MODEL		0					// 1: use single model for all regions, 0: use seperate models
-#define	SVM_NEG_POS_RATIO		5					// maximum ratio of negtive/positive samples
+#define	USE_UNIFIED_MODEL		1					// 1: use single model for all regions, 0: use seperate models
+#define	SVM_NEG_POS_RATIO		10					// maximum ratio of negtive/positive samples
 
 /****************************************************************/
 

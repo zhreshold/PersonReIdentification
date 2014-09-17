@@ -106,7 +106,12 @@ public:
 	void	train_image_model();
 	void	load_image_weights();
 	void	rank_cmc();
-	float	get_rank_n(int n);							// return the n-th rank
+	float	get_rank_n(int n);									// return the n-th rank
+
+#if DEV_DEBUG
+	// debug functions
+	void	debug_show_top_n(int n);					// show top n match results
+#endif
 
 private:
 	vector<vector<FeatureType>> imgFeat;					// image feature buffer

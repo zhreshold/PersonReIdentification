@@ -46,7 +46,9 @@ int	main()
 	cout << "Rank 100 : " << feature.get_rank_n(100) * 100 << endl;
 	cout << "Rank 316 : " << feature.get_rank_n(316) * 100 << endl;
 
-
+#if DEV_DEBUG
+	feature.debug_show_top_n(10);
+#endif
 
 	system("pause");
 }

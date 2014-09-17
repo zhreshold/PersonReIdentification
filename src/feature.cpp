@@ -435,8 +435,14 @@ void pri_feat::extract_feature_image(vector<FeatureType> &feat)
 	vector<FeatureType>	blockFeatBuffer, imageFeatBuffer;
 
 	// calculate block width and height
-	blockHeight = roi.height / IMAGE_PARTITION_Y;
-	blockWidth = roi.width / IMAGE_PARTITION_X;
+	//blockHeight = roi.height / IMAGE_PARTITION_Y;
+	//blockWidth = roi.width / IMAGE_PARTITION_X;
+	double	divy = IMAGE_PARTITION_Y - IMAGE_PARTITION_Y * PARTITION_OVERLAP + PARTITION_OVERLAP;
+	double	divx = IMAGE_PARTITION_X - IMAGE_PARTITION_X * PARTITION_OVERLAP + PARTITION_OVERLAP;
+	blockHeight = (int)floor(roi.height / divy);
+	blockWidth = (int)floor(roi.width / divx);
+	int	stepHeight = blockHeight - (int)ceil(blockHeight * PARTITION_OVERLAP);
+	int stepWidth = blockWidth - (int)ceil(blockWidth * PARTITION_OVERLAP);
 
 	// validation check
 	if (image.rows != mask.rows || image.cols != mask.cols)
@@ -469,8 +475,8 @@ void pri_feat::extract_feature_image(vector<FeatureType> &feat)
 	{
 		for (int j = 0; j < IMAGE_PARTITION_X; j++)
 		{
-			int		row = roi.y + i * blockHeight;								// block start y
-			int		col = roi.x + j * blockWidth;								// block start x
+			int		row = roi.y + i * stepHeight;								// block start y
+			int		col = roi.x + j * stepWidth;								// block start x
 			Rect	blockROI = Rect(col, row, blockWidth, blockHeight);			// block ROI
 
 			extract_feature_block(blockFeatBuffer, blockROI);
@@ -722,7 +728,57 @@ void pri_feat::save_pairwise_feature_block()
 
 	if (USE_UNIFIED_MODEL)
 	{
+		ofstream	file(path + "blocks.trdat", ios::out | ios::trunc);
+		if (!file.is_open())
+			exit(ERR_FILE_UNABLE_TO_OPEN);
 
+		// intra pairs first
+		for (int i = 0; i < pairIdxIntra.size(); i++)
+		{
+			// switch regions to operate
+			for (int k = 0; k < numPartitions; k++)
+			{
+				// feature range
+				vector<FeatureType>::iterator	startIter = imgFeat[pairIdxIntra[i][0]].begin() + featLen * k;
+				vector<FeatureType>::iterator	endIter = startIter + featLen;
+
+				// partial feature
+				vector<FeatureType> f1(startIter, endIter);
+				startIter = imgFeat[pairIdxIntra[i][1]].begin() + featLen * k;
+				endIter = startIter + featLen;
+				vector<FeatureType> f2(startIter, endIter);
+
+
+				// write pairwise feature to file
+				file << 1 << "\t";									// intra pair label = 1
+				write_similarity_to_file(file, f1, f2);
+			}
+		}
+
+		// then inter pairs
+		for (int i = 0; i < pairIdxInter.size(); i++)
+		{
+			// switch regions to operate
+			for (int k = 0; k < numPartitions; k++)
+			{
+				// feature range
+				vector<FeatureType>::iterator	startIter = imgFeat[pairIdxInter[i][0]].begin() + featLen * k;
+				vector<FeatureType>::iterator	endIter = startIter + featLen;
+
+				// partial feature
+				vector<FeatureType> f1(startIter, endIter);
+				startIter = imgFeat[pairIdxInter[i][1]].begin() + featLen * k;
+				endIter = startIter + featLen;
+				vector<FeatureType> f2(startIter, endIter);
+
+
+				// write pairwise feature to file
+				file << -1 << "\t";									// inter pair label = 0
+				write_similarity_to_file(file, f1, f2);
+			}
+		}
+
+		file.close();
 	}
 	else
 	{
@@ -857,7 +913,11 @@ void pri_feat::train_block_models()
 
 	if (USE_UNIFIED_MODEL)
 	{
-
+		sprintf(filename, "../cache/blocks.trdat");
+		sprintf(modelname, "../cache/blocks.model");
+		char	systemcall[2048];
+		sprintf(systemcall, "cd /d %s && %s %s %s", exePath.c_str(), exeFile.c_str(), filename, modelname);
+		system(systemcall);
 	}
 	else
 	{
@@ -895,7 +955,42 @@ void pri_feat::load_block_weights()
 
 	if (USE_UNIFIED_MODEL)
 	{
+		char		filename[260];
+		sprintf(filename, "cache/blocks.model");
+		ifstream	file(ROOT_PATH + string(filename), ios::in);
+		if (!file.is_open())
+			exit(ERR_FILE_UNABLE_TO_OPEN);
 
+		string	line = "";
+		int		featLen = 0;
+
+		while (line != "w")
+		{
+			getline(file, line);
+
+			// try to get the feature length
+			if (line.substr(0, 10) == "nr_feature")
+				featLen = stoi(line.substr(11, line.size() - 11));
+		}
+
+		if (featLen < 1)
+		{
+			printf("Error feature length detected!\n");
+			exit(ERR_SEE_NOTICE);
+		}
+
+		// temporal weights vector
+		vector<float>	weights;
+		for (int j = 0; j < featLen; j++)
+		{
+			float	buf;
+			file >> buf;
+			weights.push_back(buf);
+		}
+		// push back to 2-D vector
+		blockWeights.push_back(weights);
+
+		file.close();
 	}
 	else
 	{
@@ -1088,13 +1183,32 @@ void pri_feat::get_combine_image_feature(vector<FeatureType> & combFeat, vector<
 		combFeat.push_back(sim);
 	}
 
+	// calculate mean and standard deviation
+	float	sum = std::accumulate(combFeat.begin(), combFeat.end(), 0.f);
+	float	mean = sum / numBlocks;
+	float	accum = 0.0;
+	std::for_each(combFeat.begin(), combFeat.end(), 
+	[&](const float d)
+	{ 
+		accum += (d - mean)*(d - mean); 
+	}
+	);
+
+	float stdev = sqrt(accum / numBlocks);
+	combFeat.push_back(mean);
+	combFeat.push_back(stdev);
+	
+
 	// try some combination
-	// combination of two blocks
+	// combination of two blocks, mean and standard dev
 	for (int i = 0; i < numBlocks; i++)
 	for (int j = i + IMAGE_PARTITION_X; j < numBlocks; j += IMAGE_PARTITION_X)
 	{
 		float	sim = (combFeat[i] + combFeat[j]) / 2;
+		float	stdev2 = (combFeat[i] - sim) * (combFeat[i] - sim) + (combFeat[j] - sim) * (combFeat[j] - sim);
+		stdev2 = sqrt(stdev2 / 2);
 		combFeat.push_back(sim);
+		combFeat.push_back(stdev2);
 	}
 	// combination of three blocks
 	for (int i = 0; i < numBlocks; i++)
@@ -1102,7 +1216,12 @@ void pri_feat::get_combine_image_feature(vector<FeatureType> & combFeat, vector<
 	for (int k = j + IMAGE_PARTITION_X; k < numBlocks; k += IMAGE_PARTITION_X)
 	{
 		float	sim = (combFeat[i] + combFeat[j] + combFeat[k]) / 3;
+		float	stdev3 = (combFeat[i] - sim) * (combFeat[i] - sim) 
+						+ (combFeat[j] - sim) * (combFeat[j] - sim) 
+						+ (combFeat[k] - sim) * (combFeat[k] - sim);
+		stdev3 = sqrt(stdev3 / 3);
 		combFeat.push_back(sim);
+		combFeat.push_back(stdev3);
 	}
 	
 }
@@ -1198,3 +1317,64 @@ float pri_feat::get_rank_n(int n)
 	// n = n - 1 to fit the structure
 	return ranks[n - 1];
 }
+
+#if DEV_DEBUG
+
+void pri_feat::debug_show_top_n(int n)
+{
+	// try to put the top n images side by side in horizontal direction
+	Mat		qImage = imread(filenames[0], 1);
+	// create a canvas that is height x ((n+2) * width) : one query, one target, n top
+	Mat		canvas;
+	canvas.create(qImage.rows, qImage.cols * (n + 2), qImage.type());
+
+	Rect	roi;
+	char	filename[260];
+
+	for (int idx = 0; idx < results.size(); idx++)
+	{
+		cout << "--------------------------------------------------" << endl;
+		cout << "Debug top n for: " << queryIdx[idx][numShots] << endl;
+		// first copy query image
+		roi = Rect(0, 0, qImage.cols, qImage.rows);
+		sprintf(filename, "%sdata/VIPeR/%03d_00.bmp", ROOT_PATH, queryIdx[idx][numShots]);
+		qImage = imread(filename, 1);
+		qImage.copyTo(canvas(roi));
+
+		// top n images
+		for (int i = 0; i < n; i++)
+		{
+			roi = Rect(qImage.cols * (i + 1), 0, qImage.cols, qImage.rows);
+			sprintf(filename, "%sdata/VIPeR/%03d_01.bmp", ROOT_PATH, results[idx][i].id);
+			cout << "Top score #" << i + 1 << ": " << results[idx][i].score << endl;
+			qImage = imread(filename, 1);
+			qImage.copyTo(canvas(roi));
+		}
+
+		// target image
+		cout << "----------" << endl;
+		int	rank = numPersons;
+		for (int i = 0; i < numPersons; i++)
+		{
+			if (results[idx][i].id == queryIdx[idx][numShots])
+			{
+				rank = i;
+				break;
+			}
+		}
+		cout << "self rank: " << rank + 1 << endl;
+		cout << "self target score: " << results[idx][rank].score << endl;
+		roi = Rect(canvas.cols - qImage.cols, 0, qImage.cols, qImage.rows);
+		sprintf(filename, "%sdata/VIPeR/%03d_01.bmp", ROOT_PATH, queryIdx[idx][numShots]);
+		qImage = imread(filename, 1);
+		qImage.copyTo(canvas(roi));
+
+		// show image
+		destroyAllWindows();
+		imshow("Top n debug window", canvas);
+		waitKey(0);
+	}
+	
+}
+
+#endif
