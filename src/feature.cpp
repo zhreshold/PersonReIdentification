@@ -77,6 +77,7 @@ pri_feat::~pri_feat()
 	blockWeights.clear();
 	imageWeights.clear();
 	results.clear();
+	partitionSort.clear();
 }
 
 void pri_feat::init(pri_dataset &dataset)
@@ -1136,6 +1137,7 @@ void pri_feat::save_pairwise_feature_image()
 	file.close();
 }
 
+
 void pri_feat::get_combine_image_feature(vector<FeatureType> & combFeat, vector<FeatureType> f1, vector<FeatureType> f2)
 {
 	const int numBlocks = IMAGE_PARTITION_Y * IMAGE_PARTITION_X;
@@ -1316,6 +1318,88 @@ float pri_feat::get_rank_n(int n)
 {
 	// n = n - 1 to fit the structure
 	return ranks[n - 1];
+}
+
+void pri_feat::partition_sort()
+{
+	partitionSort.clear();
+
+	if (imgFeat.size() < 1)
+		return;
+
+	// init
+	if (blockWeights.size() < 1)
+		load_block_weights();
+
+	if (blockWeights.size() < 1)
+	{
+		printf("Error: SVM model weights invalid!\n");
+		exit(ERR_SEE_NOTICE);
+	}
+
+	const int	numPartition = IMAGE_PARTITION_Y * IMAGE_PARTITION_X;
+	// sort for each partition
+	for (int i = 0; i < numPersons; i++)
+	{
+		vector<vector<sort_descend>> search;
+		search.resize(numPartition);
+		int	qIdx = queryIdx[i][0];		// use the first image in each query
+		for (int j = 0; j < numPersons; j++)
+		for (int k = 1; k < numShots; k++)
+		{
+			int		gIdx = queryIdx[j][k];	// gallery index
+			vector<float>	combFeat;
+			// get lower level score
+			get_combine_image_feature(combFeat, imgFeat[qIdx], imgFeat[gIdx]);
+			for (int m = 0; m < numPartition; m++)
+			{
+				float	score = combFeat[m];
+				sort_descend sort;
+				sort.score = score;
+				sort.id = imgFeatID[gIdx];
+				search[m].push_back(sort);
+			}
+			
+		}
+
+		for (int m = 0; m < numPartition; m++)
+		{
+			// sort according to the scores
+			sort(search[m].begin(), search[m].end());
+			partitionSort.push_back(search[m]);
+		}
+	}
+
+	// write to file
+	ofstream	file("../../../cache/sorts.trdat", ios::out | ios::trunc);
+	if (!file.is_open())
+	{
+		exit(ERR_FILE_UNABLE_TO_OPEN);
+		system("pause");
+	}
+		
+
+	int	ptr = 0;
+	for (int i = 0; i < numPersons; i++)
+	{
+		int qId = queryIdx[i][numShots];
+
+		file << qId << "\t" << endl;
+
+		for (int m = 0; m < numPartition; m++)
+		{
+			for (int j = 0; j < partitionSort[ptr].size(); j++)
+			{
+				file << partitionSort[ptr][j].id << " " << partitionSort[ptr][j].score << " ";
+			}
+			ptr++;
+			file << endl;
+		}
+		
+		
+	}
+
+	file.close();
 }
 
 #if DEV_DEBUG

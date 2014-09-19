@@ -107,6 +107,7 @@ public:
 	void	load_image_weights();
 	void	rank_cmc();
 	float	get_rank_n(int n);									// return the n-th rank
+	void	partition_sort();
 
 #if DEV_DEBUG
 	// debug functions
@@ -139,8 +140,9 @@ private:
 	Mat							grayImage;					// grayscale image
 
 	// sort results for matching
-	vector<vector<sort_descend>> results;					// stores sorted results for matching
-	vector<float>				ranks;						// store ranks;
+	vector<vector<sort_descend>>	results;					// stores sorted results for matching
+	vector<float>					ranks;						// store ranks;
+	vector<vector<sort_descend>>	partitionSort;				// sort for each partition
 
 
 	// private functions
