@@ -879,6 +879,20 @@ float pri_feat::similarity_score(float f1, float f2)
 	return val;
 }
 
+float pri_feat::dist_score(float f1, float f2)
+{
+	float val;
+
+	if (abs(f1) + abs(f2) == 0)
+	{
+		return 0;
+	}
+
+	val = (f1 - f2)*(f1 - f2) / (abs(f1) + abs(f2));
+
+	return val;
+}
+
 
 void pri_feat::write_similarity_to_file(ofstream &file, vector<FeatureType> f1, vector<FeatureType> f2)
 {
@@ -1229,6 +1243,96 @@ void pri_feat::get_combine_image_feature(vector<FeatureType> & combFeat, vector<
 }
 
 
+void pri_feat::get_combine_image_feature_no_weight(vector<FeatureType> & combFeat, vector<FeatureType> f1, vector<FeatureType> f2)
+{
+	const int numBlocks = IMAGE_PARTITION_Y * IMAGE_PARTITION_X;
+
+	// size check
+	if (f1.size() != f2.size())
+		return;
+
+	// reset
+	combFeat.clear();
+
+
+	if (blockWeights.size() == 1 && USE_UNIFIED_MODEL)
+	{
+		// duplicate weights
+		vector<float>	weights = blockWeights[0];
+		for (int i = 1; i < numBlocks; i++)
+			blockWeights.push_back(weights);
+	}
+	else if (blockWeights.size() > 1)
+	{
+		if (blockWeights.size() != numBlocks)
+			exit(ERR_SIZE_MISMATCH);
+	}
+	else
+	{
+		printf("Error: block weights size invalid!\n");
+		exit(ERR_SEE_NOTICE);
+	}
+
+	size_t	featLen = blockWeights[0].size();
+	if (featLen * numBlocks != f1.size())
+		exit(ERR_SIZE_MISMATCH);
+
+	// basic block similarity
+	int		featPtr = 0;
+	for (int i = 0; i < numBlocks; i++)
+	{
+		float	sim = 0;
+		for (int j = 0; j < featLen; j++)
+		{
+			sim += dist_score((float)f1[featPtr], (float)f2[featPtr]);
+			featPtr++;
+		}
+		combFeat.push_back(sim);
+	}
+
+	// calculate mean and standard deviation
+	float	sum = std::accumulate(combFeat.begin(), combFeat.end(), 0.f);
+	float	mean = sum / numBlocks;
+	float	accum = 0.0;
+	std::for_each(combFeat.begin(), combFeat.end(),
+		[&](const float d)
+	{
+		accum += (d - mean)*(d - mean);
+	}
+	);
+
+	float stdev = sqrt(accum / numBlocks);
+	combFeat.push_back(mean);
+	combFeat.push_back(stdev);
+
+
+	// try some combination
+	// combination of two blocks, mean and standard dev
+	for (int i = 0; i < numBlocks; i++)
+	for (int j = i + IMAGE_PARTITION_X; j < numBlocks; j += IMAGE_PARTITION_X)
+	{
+		float	sim = (combFeat[i] + combFeat[j]) / 2;
+		float	stdev2 = (combFeat[i] - sim) * (combFeat[i] - sim) + (combFeat[j] - sim) * (combFeat[j] - sim);
+		stdev2 = sqrt(stdev2 / 2);
+		combFeat.push_back(sim);
+		combFeat.push_back(stdev2);
+	}
+	// combination of three blocks
+	for (int i = 0; i < numBlocks; i++)
+	for (int j = i + IMAGE_PARTITION_X; j < numBlocks; j += IMAGE_PARTITION_X)
+	for (int k = j + IMAGE_PARTITION_X; k < numBlocks; k += IMAGE_PARTITION_X)
+	{
+		float	sim = (combFeat[i] + combFeat[j] + combFeat[k]) / 3;
+		float	stdev3 = (combFeat[i] - sim) * (combFeat[i] - sim)
+			+ (combFeat[j] - sim) * (combFeat[j] - sim)
+			+ (combFeat[k] - sim) * (combFeat[k] - sim);
+		stdev3 = sqrt(stdev3 / 3);
+		combFeat.push_back(sim);
+		combFeat.push_back(stdev3);
+	}
+
+}
+
 float pri_feat::image_pairwise_score(int idx1, int idx2)
 {
 
@@ -1459,6 +1563,311 @@ void pri_feat::debug_show_top_n(int n)
 		waitKey(0);
 	}
 	
+}
+
+void pri_feat::debug_show_strip_score()
+{
+	// validation check
+	if (imgFeat.size() < 1)
+	{
+		return;
+	}
+
+	load_block_weights();
+	create_pair_index();
+
+	if (blockWeights.size() < 1)
+	{
+		return;
+	}
+
+	const int	numPartitions = IMAGE_PARTITION_Y * IMAGE_PARTITION_X;
+	size_t		featLen = imgFeat[0].size() / numPartitions;
+
+	if (blockWeights[0].size() != featLen)
+	{
+		printf("Load weights length mismatch!\n");
+		exit(ERR_SEE_NOTICE);
+	}
+
+	if (pairIdxIntra.size() < 1 || pairIdxInter.size() < 1)
+		create_pair_index();
+
+	// calculate similarities and write to file
+	//ofstream	file(ROOT_PATH + string("cache/image.trdat"), ios::out | ios::trunc);
+	//if (!file.is_open())
+	//	exit(ERR_FILE_UNABLE_TO_OPEN);
+
+
+	// copy from global ROI
+	Rect				roi = gROI;
+	int					blockHeight, blockWidth;
+
+	// calculate block width and height
+	//blockHeight = roi.height / IMAGE_PARTITION_Y;
+	//blockWidth = roi.width / IMAGE_PARTITION_X;
+	double	divy = IMAGE_PARTITION_Y - IMAGE_PARTITION_Y * PARTITION_OVERLAP + PARTITION_OVERLAP;
+	double	divx = IMAGE_PARTITION_X - IMAGE_PARTITION_X * PARTITION_OVERLAP + PARTITION_OVERLAP;
+	blockHeight = (int)floor(roi.height / divy);
+	blockWidth = (int)floor(roi.width / divx);
+	int	stepHeight = blockHeight - (int)ceil(blockHeight * PARTITION_OVERLAP);
+	int stepWidth = blockWidth - (int)ceil(blockWidth * PARTITION_OVERLAP);
+
+
+
+	Mat	stitchImg, image;
+	image = imread(filenames[0], 1);
+	stitchImg.create(image.rows, image.cols * 3, image.type());
+
+	// intra pairs first
+	for (int i = 0; i < pairIdxIntra.size(); i++)
+	{
+		vector<float>	combFeat;
+		get_combine_image_feature(combFeat, imgFeat[pairIdxIntra[i][0]], imgFeat[pairIdxIntra[i][1]]);
+
+
+		Mat img1, img2, demoImage;
+		img1 = imread(filenames[pairIdxIntra[i][0]], 1);
+		img2 = imread(filenames[pairIdxIntra[i][1]], 1);
+		// draw bbox
+		int tick = 0;
+		for (int i = 0; i < IMAGE_PARTITION_Y; i++)
+		{
+			for (int j = 0; j < IMAGE_PARTITION_X; j++)
+			{
+				int		row = roi.y + i * stepHeight;								// block start y
+				int		col = roi.x + j * stepWidth;								// block start x
+				Rect	blockROI = Rect(col, row, blockWidth, blockHeight);			// block ROI
+				if (tick % 2 == 0)
+				{
+					rectangle(img1, blockROI, Scalar(0, 0, 255));
+					rectangle(img2, blockROI, Scalar(0, 0, 255));
+				}
+				else
+				{
+					rectangle(img1, blockROI, Scalar(0, 255, 255));
+					rectangle(img2, blockROI, Scalar(0, 255, 255));
+				}
+				tick++;
+			}
+		}
+		img1.copyTo(stitchImg(Rect(0, 0, img1.cols, img1.rows)));
+		img2.copyTo(stitchImg(Rect(stitchImg.cols - img2.cols, 0, img2.cols, img2.rows)));
+		resize(stitchImg, demoImage, Size(stitchImg.cols, stitchImg.rows) * 4);
+
+		for (int j = 0; j < numPartitions; j++)
+		{
+			char fontvalue[260];
+			sprintf(fontvalue, "%.3f", combFeat[j]);
+			putText(demoImage, fontvalue, Point(demoImage.cols / 2, (j + 1) * demoImage.rows / (numPartitions + 1)),
+				FONT_HERSHEY_COMPLEX_SMALL, 1, Scalar(255, 255, 255));
+		}
+		imshow("Compare scores", demoImage);
+		waitKey(0);
+		//file << 1 << "\t";		// intra label 1
+		//for (int j = 0; j < combFeat.size(); j++)
+		//	file << j + 1 << ":" << combFeat[j] << " ";
+		//file << endl;
+	}
+
+	// then inter pairs
+	for (int i = 0; i < pairIdxInter.size(); i++)
+	{
+		vector<float>	combFeat;
+		get_combine_image_feature_no_weight(combFeat, imgFeat[pairIdxInter[i][0]], imgFeat[pairIdxInter[i][1]]);
+		Mat img1, img2, demoImage;
+		img1 = imread(filenames[pairIdxInter[i][0]], 1);
+		img2 = imread(filenames[pairIdxInter[i][1]], 1);
+		// draw bbox
+		int tick = 0;
+		for (int i = 0; i < IMAGE_PARTITION_Y; i++)
+		{
+			for (int j = 0; j < IMAGE_PARTITION_X; j++)
+			{
+				int		row = roi.y + i * stepHeight;								// block start y
+				int		col = roi.x + j * stepWidth;								// block start x
+				Rect	blockROI = Rect(col, row, blockWidth, blockHeight);			// block ROI
+				if (tick % 2 == 0)
+				{
+					rectangle(img1, blockROI, Scalar(0, 0, 255));
+					rectangle(img2, blockROI, Scalar(0, 0, 255));
+				}
+				else
+				{
+					rectangle(img1, blockROI, Scalar(0, 255, 255));
+					rectangle(img2, blockROI, Scalar(0, 255, 255));
+				}
+				tick++;
+			}
+		}
+		img1.copyTo(stitchImg(Rect(0, 0, img1.cols, img1.rows)));
+		img2.copyTo(stitchImg(Rect(stitchImg.cols - img2.cols, 0, img2.cols, img2.rows)));
+		resize(stitchImg, demoImage, Size(stitchImg.cols, stitchImg.rows) * 4);
+
+		for (int j = 0; j < numPartitions; j++)
+		{
+			char fontvalue[260];
+			sprintf(fontvalue, "%.3f", combFeat[j]);
+			putText(demoImage, fontvalue, Point(demoImage.cols / 2, (j + 1) * demoImage.rows / (numPartitions + 1)),
+				FONT_HERSHEY_COMPLEX_SMALL, 1, Scalar(255, 255, 255));
+		}
+		imshow("Compare scores", demoImage);
+		waitKey(0);
+		//file << -1 << "\t";		// inter label -1
+		//for (int j = 0; j < combFeat.size(); j++)
+		//	file << j + 1 << ":" << combFeat[j] << " ";
+		//file << endl;
+	}
+
+	//file.close();
+}
+
+void pri_feat::partition_sort_show()
+{
+	partitionSort.clear();
+
+	if (imgFeat.size() < 1)
+		return;
+
+	// init
+	if (blockWeights.size() < 1)
+		load_block_weights();
+
+	if (blockWeights.size() < 1)
+	{
+		printf("Error: SVM model weights invalid!\n");
+		exit(ERR_SEE_NOTICE);
+	}
+
+	const int	numPartition = IMAGE_PARTITION_Y * IMAGE_PARTITION_X;
+	// sort for each partition
+	for (int i = 0; i < numPersons; i++)
+	{
+		vector<vector<sort_descend>> search;
+		search.resize(numPartition);
+		int	qIdx = queryIdx[i][0];		// use the first image in each query
+		for (int j = 0; j < numPersons; j++)
+		for (int k = 1; k < numShots; k++)
+		{
+			int		gIdx = queryIdx[j][k];	// gallery index
+			vector<float>	combFeat;
+			// get lower level score
+			get_combine_image_feature(combFeat, imgFeat[qIdx], imgFeat[gIdx]);
+			for (int m = 0; m < numPartition; m++)
+			{
+				float	score = combFeat[m];
+				sort_descend sort;
+				sort.score = score;
+				sort.id = imgFeatID[gIdx];
+				search[m].push_back(sort);
+			}
+
+		}
+
+		for (int m = 0; m < numPartition; m++)
+		{
+			// sort according to the scores
+			sort(search[m].begin(), search[m].end());
+			partitionSort.push_back(search[m]);
+		}
+	}
+
+
+	// copy from global ROI
+	Rect				roi = gROI;
+	int					blockHeight, blockWidth;
+
+	// calculate block width and height
+	//blockHeight = roi.height / IMAGE_PARTITION_Y;
+	//blockWidth = roi.width / IMAGE_PARTITION_X;
+	double	divy = IMAGE_PARTITION_Y - IMAGE_PARTITION_Y * PARTITION_OVERLAP + PARTITION_OVERLAP;
+	double	divx = IMAGE_PARTITION_X - IMAGE_PARTITION_X * PARTITION_OVERLAP + PARTITION_OVERLAP;
+	blockHeight = (int)floor(roi.height / divy);
+	blockWidth = (int)floor(roi.width / divx);
+	int	stepHeight = blockHeight - (int)ceil(blockHeight * PARTITION_OVERLAP);
+	int stepWidth = blockWidth - (int)ceil(blockWidth * PARTITION_OVERLAP);
+
+	Mat		canvas, canvasShow;
+	Mat		imgTmp = imread(filenames[0], 1);
+	int		topn = 10;
+	canvas.create(blockHeight * numPartition * 2, blockWidth * (topn + 2) * 2 + 50, imgTmp.type());
+
+	int	ptr = 0;
+	for (int i = 0; i < numPersons; i++)
+	{
+		canvas.setTo(0);
+		int qId = queryIdx[i][numShots];
+		Mat qimg = imread(filenames[i * numShots], 1);
+		Mat qimgt = imread(filenames[i * numShots + 1], 1);
+
+		for (int ii = 0; ii < IMAGE_PARTITION_Y; ii++)
+		{
+			for (int jj = 0; jj < IMAGE_PARTITION_X; jj++)
+			{
+				int		row = roi.y + ii * stepHeight;								// block start y
+				int		col = roi.x + jj * stepWidth;								// block start x
+				Rect	blockROI = Rect(col, row, blockWidth, blockHeight);			// block ROI
+				int		m = ii * IMAGE_PARTITION_X + jj;
+				char	textinfo[1000];
+
+				// self
+				qimg(blockROI).copyTo(canvas(Rect(0, blockHeight * 2 * m, blockWidth, blockHeight)));
+				//sprintf(textinfo, "%d", qId);
+				//putText(canvas, textinfo, Point(blockWidth * 0.1, blockHeight * 1.5 + blockHeight * 2 * m), 
+					//FONT_HERSHEY_SCRIPT_SIMPLEX, 0.4, Scalar(255, 255, 255));
+
+				for (int n = 0; n < topn; n++)
+				{
+					int sId = partitionSort[ptr][n].id;
+					int	sIdx = 0;
+					for (int pp = 0; pp < imgFeatID.size(); pp++)
+					{
+						if (sId == imgFeatID[pp])
+							sIdx = pp;
+					}
+					Mat simg = imread(filenames[sIdx], 1);
+					simg(blockROI).copyTo(canvas(Rect(blockWidth * 2 * (n + 1), blockHeight * 2 * m, blockWidth, blockHeight)));
+					sprintf(textinfo, "%.3f", partitionSort[ptr][n].score);
+					putText(canvas, textinfo, Point(blockWidth * 0.1 + blockWidth * 2 * (n + 1), blockHeight * 1.5 + blockHeight * 2 * m),
+						FONT_HERSHEY_SCRIPT_SIMPLEX, 0.4, Scalar(255, 255, 255));
+				}
+				
+				// self target
+				qimgt(blockROI).copyTo(canvas(Rect(blockWidth * 2 * (topn + 1), blockHeight * 2 * m, blockWidth, blockHeight)));
+
+				// draw rectangle if rank < topn
+				int	rank = numPersons;
+				for (int u = 0; u < numPersons; u++)
+				{
+					if (partitionSort[ptr][u].id == qId)
+					{
+						rank = u;
+						break;
+					}
+				}
+				if (rank < topn)
+					rectangle(canvas, Rect(blockWidth * 2 * (rank + 1), blockHeight * 2 * m, blockWidth, blockHeight), Scalar(0, 0, 255));
+
+				sprintf(textinfo, "%d-->%.3f", rank+1, partitionSort[ptr][rank].score);
+				putText(canvas, textinfo, Point(blockWidth * 0.1 + blockWidth * 2 * (topn + 1), blockHeight * 1.5 + blockHeight * 2 * m),
+					FONT_HERSHEY_SCRIPT_SIMPLEX, 0.4, Scalar(255, 255, 255));
+
+				ptr++;
+			}
+		}
+
+		line(canvas, Point(blockWidth * 1.5, 0), Point(blockWidth * 1.5, canvas.rows), Scalar(255, 255, 255), 2);
+		line(canvas, Point(blockWidth * 1.5 + blockWidth * 2 * topn, 0), Point(blockWidth * 1.5 + blockWidth * 2 * topn, canvas.rows), Scalar(255, 255, 255), 2);
+
+		canvasShow = canvas;
+		resize(canvasShow, canvasShow, Size(canvasShow.cols * 2, canvasShow.rows * 2));
+		imshow("Debug partition sort", canvasShow);
+		waitKey(100);
+
+		char	filename[260];
+		sprintf(filename, "%d.jpg", qId);
+		imwrite(ROOT_PATH + string("debug/") + filename, canvasShow);
+	}
 }
 
 #endif

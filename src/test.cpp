@@ -34,8 +34,12 @@ int	main()
 	cout << "Extracting image features..." << endl;
 	feature.extract_feature();
 
-	cout << "Saving partition sorts..." << endl;
-	feature.partition_sort();
+
+
+
+
+	//cout << "Saving partition sorts..." << endl;
+	//feature.partition_sort();
 
 	//cout << "Matching query images in gallery..." << endl;
 	//feature.rank_cmc();
@@ -50,7 +54,13 @@ int	main()
 	//cout << "Rank 316 : " << feature.get_rank_n(316) * 100 << endl;
 
 #if DEV_DEBUG
-	feature.debug_show_top_n(10);
+	cout << "Debug partition sort..." << endl;
+	feature.partition_sort_show();
+
+	//cout << "Debug strip scores..." << endl;
+	//feature.debug_show_strip_score();
+
+	//feature.debug_show_top_n(10);
 #endif
 
 	system("pause");

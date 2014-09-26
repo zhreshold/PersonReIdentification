@@ -53,11 +53,13 @@ int	main()
 	cout << "Training block-wise SVM models..." << endl;
 	feature.train_block_models();
 
-	cout << "Save pairwise image feature to file..." << endl;
-	feature.save_pairwise_feature_image();
+	
 
-	cout << "Training image SVM model..." << endl;
-	feature.train_image_model();
+	//cout << "Save pairwise image feature to file..." << endl;
+	//feature.save_pairwise_feature_image();
+
+	//cout << "Training image SVM model..." << endl;
+	//feature.train_image_model();
 
 
 

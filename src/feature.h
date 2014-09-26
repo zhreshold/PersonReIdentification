@@ -109,9 +109,12 @@ public:
 	float	get_rank_n(int n);									// return the n-th rank
 	void	partition_sort();
 
+
 #if DEV_DEBUG
 	// debug functions
 	void	debug_show_top_n(int n);					// show top n match results
+	void	debug_show_strip_score();					// show pairwise strip score and image for observation
+	void	partition_sort_show();
 #endif
 
 private:
@@ -156,8 +159,10 @@ private:
 
 	// similarity functions
 	float	similarity_score(float f1, float f2);
+	float	dist_score(float f1, float f2);
 	void	write_similarity_to_file(ofstream &file, vector<FeatureType> f1, vector<FeatureType> f2);	// write similarity to file
 	void	get_combine_image_feature(vector<FeatureType> & combFeat, vector<FeatureType> f1, vector<FeatureType> f2);
+	void    get_combine_image_feature_no_weight(vector<FeatureType> & combFeat, vector<FeatureType> f1, vector<FeatureType> f2);
 	float	image_pairwise_score(int idx1, int idx2);
 	
 	
