@@ -59,7 +59,7 @@ void pri_dataset::init_viper()
 	// config
 	numPersonTotal = 632;
 	numShots = 2;
-	gROI = Rect(8, 16, 32, 106);
+	gROI = Rect(4, 16, 40, 106);
 
 
 	// path

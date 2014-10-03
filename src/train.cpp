@@ -27,6 +27,27 @@
 
 int	main()
 {
+	// train kmeans
+	if (NEW_KMEANS_CENTERS)
+	{
+		pri_dataset	wholeDataset(PHASE_COLLECTING);
+		pri_feat	featNewKmeans(2);
+		hkmeans		km;
+
+		featNewKmeans.init_new_kmeans(km, wholeDataset);
+
+		cout << "Overall # blocks: " << km.patches.size() << endl;
+		km.K = 4;
+		km.depth = 6;
+		km.train();
+		//km.debug_output_tree();
+		km.write_tree_to_file("../../../cache/hkmeans.dat");
+
+		system("pause");
+		exit(0);
+	}
+
+
 	// train new model
 	if (NEW_GMM_MODELS)
 	{

@@ -24,6 +24,7 @@
 
 #include "define.h"
 #include "dataset.h"
+#include "hkmeans.h"
 #include <vector>
 #include <opencv\cv.h>
 #include <opencv\highgui.h>
@@ -31,6 +32,7 @@ extern "C"
 {
 #include <vl/gmm.h>
 #include <vl/fisher.h>
+#include <vl/hog.h>
 }
 
 // color labels definition. 
@@ -108,6 +110,7 @@ public:
 	void	rank_cmc();
 	float	get_rank_n(int n);									// return the n-th rank
 	void	partition_sort();
+	void	init_new_kmeans(hkmeans &km, pri_dataset &dataset);
 
 
 #if DEV_DEBUG
@@ -124,8 +127,10 @@ private:
 	vector<UChar>				m_hsvColorLabels;			// color labels look-up table in HSV space, 16x16x16 = 4096 dim
 	vector<LDType>				ldBuffer;					// local descriptor buffer
 	VlGMM*						m_gmm;						// gaussian mixture models
+	VlHog*						m_hog;						// hog
 	vector<vector<float>>		blockWeights;				// block-wise SVM weights, DIM = (numBlocks x dim) or ( 1 x dim) if use unified model
 	vector<float>				imageWeights;				// image-wise SVM weights
+	hkmeans						m_km;
 
 	int							numPersons;					// number of individuals for current experiment
 	int							numShots;					// number of shots of each individual
@@ -159,8 +164,13 @@ private:
 
 	// similarity functions
 	float	similarity_score(float f1, float f2);
+	float	similarity_score_2(float f1, float f2);
 	float	dist_score(float f1, float f2);
-	void	write_similarity_to_file(ofstream &file, vector<FeatureType> f1, vector<FeatureType> f2);	// write similarity to file
+	float	hist_similartity_score(vector<FeatureType> f1, vector<FeatureType> f2);
+	float	hist_similartity_score_2(vector<FeatureType> f1, vector<FeatureType> f2);
+	float	hist_dist_score(vector<FeatureType> f1, vector<FeatureType> f2);
+	void	write_similarity_to_file(ofstream &file, vector<FeatureType> f1, vector<FeatureType> f2, int featLen, int k);	// write similarity to file
+	void	extract_feature_image_kmeans(hkmeans &km);
 	void	get_combine_image_feature(vector<FeatureType> & combFeat, vector<FeatureType> f1, vector<FeatureType> f2);
 	void    get_combine_image_feature_no_weight(vector<FeatureType> & combFeat, vector<FeatureType> f1, vector<FeatureType> f2);
 	float	image_pairwise_score(int idx1, int idx2);

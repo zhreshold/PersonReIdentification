@@ -31,11 +31,15 @@ pri_feat::pri_feat()
 	numPersons = 0;
 	numShots = 0;
 
+	m_hog = vl_hog_new(VlHogVariantDalalTriggs, 9, VL_FALSE);
+
 	// compute hsv color label look-up table
 	get_hsv_color_labels();
 
 	// load GMM
 	load_gmm();
+
+	m_km.read_tree_from_file("../../../cache/hkmeans.dat");
 }
 
 pri_feat::pri_feat(int	indicator)
@@ -51,12 +55,28 @@ pri_feat::pri_feat(int	indicator)
 
 		// load GMM
 		load_gmm();
+
+		m_hog = vl_hog_new(VlHogVariantDalalTriggs, 9, VL_FALSE);
+
+		m_km.read_tree_from_file("../../../cache/hkmeans.dat");
+	}
+	else if (indicator == 0)
+	{
+		// init
+		numPersons = 0;
+		numShots = 0;
+		m_hog = vl_hog_new(VlHogVariantDalalTriggs, 9, VL_FALSE);
+
+		m_km.read_tree_from_file("../../../cache/hkmeans.dat");
 	}
 	else
 	{
 		// init
 		numPersons = 0;
 		numShots = 0;
+		m_hog = vl_hog_new(VlHogVariantDalalTriggs, 9, VL_FALSE);
+
+		m_km.read_tree_from_file("../../../cache/hkmeans.dat");
 	}
 
 }
@@ -74,6 +94,8 @@ pri_feat::~pri_feat()
 	queryIdx.clear();
 	vl_gmm_delete(m_gmm);
 	m_gmm = NULL;
+	vl_hog_delete(m_hog);
+	m_hog = NULL;
 	blockWeights.clear();
 	imageWeights.clear();
 	results.clear();
@@ -209,6 +231,30 @@ void pri_feat::load_gmm()
 	file.close();
 }
 
+void pri_feat::init_new_kmeans(hkmeans &km, pri_dataset &dataset)
+{
+	// copy infos from dataset class
+	numPersons = dataset.num_person();
+	numShots = dataset.num_shot();
+	filenames = dataset.get_filenames();
+	queryIdx = dataset.get_query_index();
+	gROI = dataset.get_roi();
+
+	// extract feature and push back into kmeans class
+	cout << "Extracting patch features..." << endl;
+
+	
+
+	km.clear();
+	for (int i = 0; i < filenames.size(); i++)
+	{
+		image = imread(filenames[i], 1);
+		// use default mask in this version
+		mask.create(image.rows, image.cols, CV_8UC1);
+		mask.setTo(1);
+		extract_feature_image_kmeans(km);
+	}
+}
 
 void pri_feat::get_hsv_color_labels()
 {
@@ -426,6 +472,92 @@ void pri_feat::extract_feature()
 	
 }
 
+void pri_feat::extract_feature_image_kmeans(hkmeans &km)
+{
+
+	// copy from global ROI
+	Rect				roi = gROI;
+	int					blockHeight, blockWidth;
+	vector<FeatureType>	blockFeatBuffer;
+
+	// calculate block width and height
+	//blockHeight = roi.height / IMAGE_PARTITION_Y;
+	//blockWidth = roi.width / IMAGE_PARTITION_X;
+	double	divy = IMAGE_PARTITION_Y - IMAGE_PARTITION_Y * PARTITION_OVERLAP + PARTITION_OVERLAP;
+	double	divx = IMAGE_PARTITION_X - IMAGE_PARTITION_X * PARTITION_OVERLAP + PARTITION_OVERLAP;
+	blockHeight = (int)floor(roi.height / divy);
+	blockWidth = (int)floor(roi.width / divx);
+	int	stepHeight = blockHeight - (int)ceil(blockHeight * PARTITION_OVERLAP);
+	int stepWidth = blockWidth - (int)ceil(blockWidth * PARTITION_OVERLAP);
+
+	// validation check
+	if (image.rows != mask.rows || image.cols != mask.cols)
+		exit(ERR_SIZE_MISMATCH);
+
+	if (roi.x < 1 || roi.x + roi.width > image.cols
+		|| roi.y < 1 || roi.y + roi.height > image.rows)
+	{
+		printf("Invalid ROI: out of boarder!\n");
+		system("pause");
+		exit(ERR_SEE_NOTICE);
+	}
+
+	if (blockHeight < 5 || blockWidth < 5)
+	{
+		printf("Block too small, check paramters!\n");
+		system("pause");
+		exit(ERR_SEE_NOTICE);
+	}
+
+	// convert to various color space
+	cvtColor(image, hsvImage, CV_BGR2HSV);
+	cvtColor(image, labImage, CV_BGR2Lab);
+	cvtColor(image, grayImage, CV_BGR2GRAY);
+
+	//feat.clear();
+
+	// extract feature in each block
+	for (int i = 0; i < IMAGE_PARTITION_Y; i++)
+	{
+		for (int j = 0; j < IMAGE_PARTITION_X; j++)
+		{
+			int		row = roi.y + i * stepHeight;								// block start y
+			int		col = roi.x + j * stepWidth;								// block start x
+			Rect	blockROI = Rect(col, row, blockWidth, blockHeight);			// block ROI
+
+			extract_feature_block(blockFeatBuffer, blockROI);
+			//feat.insert(feat.end(), blockFeatBuffer.begin(), blockFeatBuffer.end());
+			// put into kmeans struct
+			hkPatch patch;
+			patch.feature = blockFeatBuffer;
+			if (STORE_PATCH_DATA)
+			{
+				Mat thisBlk = image(blockROI);
+				for (int m = 0; m < thisBlk.rows; m++)
+				{
+					for (int n = 0; n < thisBlk.cols; n++)
+					{
+						uchar	r, g, b;
+						b = thisBlk.at<Vec3b>(m, n)[0];
+						g = thisBlk.at<Vec3b>(m, n)[1];
+						r = thisBlk.at<Vec3b>(m, n)[2];
+						patch.data.push_back(b);
+						patch.data.push_back(g);
+						patch.data.push_back(r);
+					}
+				}
+				patch.channel = 3;
+				patch.height = thisBlk.rows;
+				patch.width = thisBlk.cols;
+				patch.step = patch.width * patch.channel;
+				patch.flag = 1;
+			}
+			km.patches.push_back(patch);
+		}
+	}
+
+}
+
 
 void pri_feat::extract_feature_image(vector<FeatureType> &feat)
 {
@@ -568,122 +700,167 @@ void pri_feat::extract_feature_block(vector<FeatureType> &blockFeat, Rect blkROI
 	// reset buffer for histogram
 	ldBuffer.clear();
 	blockFeat.clear();
-	blockFeat.resize(128 + COLOR_LABEL_COUNT);
-	std::fill(blockFeat.begin(), blockFeat.end(), 0.f);
 
-	for (int row = blkROI.y; row < blkROI.y + blkROI.height; row++)
+	// parameters for color histogram
+	vector<double>	colorScales{ 1, 0.75, 0.5 };
+	int				minScale = 3;
+
+	// Lab Color histograms
+	for (int i = 0; i < colorScales.size(); i++)
 	{
-		for (int col = blkROI.x; col < blkROI.x + blkROI.width; col++)
+		double	scale = colorScales[i];
+		int		w = (int)(blkROI.width * scale);
+		int		h = (int)(blkROI.height * scale);
+		if (w > minScale && h > minScale)
 		{
-			// check mask at this pixel and its 4 neighbors
-			if (mask.at<UChar>(row, col)
-				&& mask.at<UChar>(row, col - 1)
-				&& mask.at<UChar>(row, col + 1)
-				&& mask.at<UChar>(row - 1, col)
-				&& mask.at<UChar>(row + 1, col))
+			Mat block;
+			resize(labImage(blkROI), block, Size(w, h));
+
+			// temporal buffer
+			vector<FeatureType> hist;
+			hist.resize(96);
+			fill(hist.begin(), hist.end(), 0.f);
+
+			for (int row = 0; row < h; row++)
 			{
-				// retrieve values
-				b = image.at<Vec3b>(row, col)[0];
-				g = image.at<Vec3b>(row, col)[1];
-				r = image.at<Vec3b>(row, col)[2];
-				h = hsvImage.at<Vec3b>(row, col)[0];
-				s = hsvImage.at<Vec3b>(row, col)[1];
-				v = hsvImage.at<Vec3b>(row, col)[2];
-				l = labImage.at<Vec3b>(row, col)[0];
-				a = labImage.at<Vec3b>(row, col)[1];
-				bb = labImage.at<Vec3b>(row, col)[2];
+				for (int col = 0; col < w; col++)
+				{
+					l = block.at<Vec3b>(row, col)[0];
+					a = block.at<Vec3b>(row, col)[1];
+					bb = block.at<Vec3b>(row, col)[2];
 
-				// --------------------------quantize to histogram----------------------------//
-				// [0-136] --> RGB, HSV, Lab
-				// [0-15] --> red
-				bin = r >> 4;
-				offset = 0;
-				blockFeat.at(bin + offset)++;
-				// [16-31] --> green
-				bin = g >> 4;
-				offset += 16;
-				blockFeat.at(bin + offset)++;
-				// [32 - 47] --> blue
-				bin = b >> 4;
-				offset += 16;
-				blockFeat.at(bin + offset)++;
-				// [48 - 63] --> hue
-				bin = (h << 4) / 180;			// original h ~ [0 180]
-				//assert(bin >= 0 && bin < 16);
-				offset += 16;
-				blockFeat.at(bin + offset)++;
-				// [64 - 79] --> saturation
-				bin = s >> 4;
-				offset += 16;
-				blockFeat.at(bin + offset)++;
-				// [80 - 95] --> value
-				bin = v >> 4;
-				offset += 16;
-				blockFeat.at(bin + offset)++;
-				// [96 - 111] --> a
-				bin = a >> 4;
-				offset += 16;
-				blockFeat.at(bin + offset)++;
-				// [112 - 127] --> b
-				bin = bb >> 4;
-				offset += 16;
-				blockFeat.at(bin + offset)++;
-				// [128 - 143] or [128 - 139] --> color label
-				r >>= 4;
-				g >>= 4;
-				b >>= 4;
-				bin = m_hsvColorLabels.at((r << 8) + (g << 4) + b);
-				offset += 16;
-				blockFeat.at(bin + offset)++;
-				//------------------------------end histogram------------------------------//
+					// l 
+					bin = l >> 3;
+					offset = 0;
+					hist[bin + offset]++;
+					offset += 32;
 
-				// ------------------------compute local descriptor------------------------//
-		
-				vector<LDType>	ldBuffPixel;
-				get_local_descriptor(row, col, ldBuffPixel);
-				ldBuffer.insert(ldBuffer.end(), ldBuffPixel.begin(), ldBuffPixel.end());
+					// a
+					bin = a >> 3;
+					hist[bin + offset]++;
+					offset += 32;
 
-
-				// --------------------------end local descriptor--------------------------//
-
-				pixelCount++;
+					// b
+					bin = bb >> 3;
+					hist[bin + offset]++;
+				}
 			}
+
+			// l2 norm
+			float	normSum = 0;
+			for (int j = 0; j < hist.size(); j++)
+			{
+				normSum += hist[j] * hist[j];
+			}
+			normSum = sqrt(normSum);
+			for (int j = 0; j < hist.size(); j++)
+			{
+				hist[j] /= normSum;
+			}
+			
+			blockFeat.insert(blockFeat.end(), hist.begin(), hist.end());
 		}
 	}
 
-	// L1-norm color histogram
-	if (pixelCount > 0)
+	// add weight for color histograms
+	for (int i = 0; i < blockFeat.size(); i++)
 	{
-		for (vector<FeatureType>::iterator iter = blockFeat.begin(); iter != blockFeat.end(); iter++)
-			*iter /= pixelCount;
+		blockFeat[i] *= 4;
 	}
 
-	// add color percent feature
-	int		percentPartition = 5;
-	offset = 128;
-
-	for (int i = 0; i < COLOR_LABEL_COUNT; i++)
-	for (int j = 0; j < 5; j++)
+	// HoG histogram
+	Mat labChannel[3];
+	split(labImage(blkROI), labChannel);
+	float*	hogdata = Malloc(float, labChannel[0].rows * labChannel[0].cols);
+	// extract hog in each channel
+	
+	// l
+	for (int i = 0; i < labChannel[0].rows * labChannel[0].cols; i++)
+		hogdata[i] = labChannel[0].data[i];
+	vl_hog_put_image(m_hog, hogdata, labChannel[0].cols, labChannel[0].rows, 1, min(blkROI.width, blkROI.height));
+	int	hogWidth = vl_hog_get_width(m_hog);
+	int hogHeight = vl_hog_get_height(m_hog);
+	int hogDim = vl_hog_get_dimension(m_hog);
+	float* hogArray = Malloc(float, hogWidth * hogHeight * hogDim);
+	vl_hog_extract(m_hog, hogArray);
+	// l2 norm
+	float	normSum = 0;
+	for (int i = 0; i < hogDim * hogWidth * hogHeight; i++)
 	{
-		bin = i * percentPartition + j + offset;
-		if (blockFeat.at(bin) > j / (FeatureType)percentPartition)
-			blockFeat.push_back(1);
-		else
-			blockFeat.push_back(0);
+		normSum += hogArray[i] * hogArray[i];
+	}
+	normSum = sqrt(normSum);
+	if (normSum > 0)
+	{
+		for (int i = 0; i < hogDim * hogWidth * hogHeight; i++)
+			blockFeat.push_back(hogArray[i] / normSum);
+	}
+	else
+	{
+		for (int i = 0; i < hogDim * hogWidth * hogHeight; i++)
+			blockFeat.push_back(hogArray[i]);
 	}
 
-	// LBP feature
+
+	
+	// a
+	for (int i = 0; i < labChannel[1].rows * labChannel[1].cols; i++)
+		hogdata[i] = labChannel[1].data[i];
+	vl_hog_put_image(m_hog, hogdata, labChannel[1].cols, labChannel[1].rows, 1, min(blkROI.width, blkROI.height));
+	vl_hog_extract(m_hog, hogArray);
+	normSum = 0;
+	for (int i = 0; i < hogDim * hogWidth * hogHeight; i++)
+	{
+		normSum += hogArray[i] * hogArray[i];
+	}
+	normSum = sqrt(normSum);
+	if (normSum > 0)
+	{
+		for (int i = 0; i < hogDim * hogWidth * hogHeight; i++)
+			blockFeat.push_back(hogArray[i] / normSum);
+	}
+	else
+	{
+		for (int i = 0; i < hogDim * hogWidth * hogHeight; i++)
+			blockFeat.push_back(hogArray[i]);
+	}
 
 
-	// fisher encoder
-	vector<FeatureType> fisherBuffer;
-	fisherBuffer.resize(LD_DIM * LD_NUM_CLUSTERS * 2);
-	fill(fisherBuffer.begin(), fisherBuffer.end(), 0.f);
-	float*		means = (float*)vl_gmm_get_means(m_gmm);
-	vl_fisher_encode(fisherBuffer.data(), VL_TYPE_FLOAT, vl_gmm_get_means(m_gmm), LD_DIM, LD_NUM_CLUSTERS,
-		vl_gmm_get_covariances(m_gmm), vl_gmm_get_priors(m_gmm), ldBuffer.data(), ldBuffer.size() / LD_DIM, VL_FISHER_FLAG_IMPROVED);
+	// b
+	for (int i = 0; i < labChannel[2].rows * labChannel[2].cols; i++)
+		hogdata[i] = labChannel[2].data[i];
+	vl_hog_put_image(m_hog, hogdata, labChannel[2].cols, labChannel[2].rows, 1, min(blkROI.width, blkROI.height));
+	vl_hog_extract(m_hog, hogArray);
+	normSum = 0;
+	for (int i = 0; i < hogDim * hogWidth * hogHeight; i++)
+	{
+		normSum += hogArray[i] * hogArray[i];
+	}
+	normSum = sqrt(normSum);
+	if (normSum > 0)
+	{
+		for (int i = 0; i < hogDim * hogWidth * hogHeight; i++)
+			blockFeat.push_back(hogArray[i] / normSum);
+	}
+	else
+	{
+		for (int i = 0; i < hogDim * hogWidth * hogHeight; i++)
+			blockFeat.push_back(hogArray[i]);
+	}
 
-	blockFeat.insert(blockFeat.end(), fisherBuffer.begin(), fisherBuffer.end());
+	// free memory
+	free(hogdata);
+	free(hogArray);
+
+	// replace with hkmeans histogram
+	vector<int> histBuff;
+	m_km.encode(&m_km.root, blockFeat, histBuff, blockFeat.size(), 1);
+	blockFeat.clear();
+	for (int i = 0; i < histBuff.size(); i++)
+	{
+		blockFeat.push_back((FeatureType)histBuff[i]);
+	}
+	
 	
 }
 
@@ -739,20 +916,20 @@ void pri_feat::save_pairwise_feature_block()
 			// switch regions to operate
 			for (int k = 0; k < numPartitions; k++)
 			{
-				// feature range
-				vector<FeatureType>::iterator	startIter = imgFeat[pairIdxIntra[i][0]].begin() + featLen * k;
-				vector<FeatureType>::iterator	endIter = startIter + featLen;
+				//// feature range
+				//vector<FeatureType>::iterator	startIter = imgFeat[pairIdxIntra[i][0]].begin() + featLen * k;
+				//vector<FeatureType>::iterator	endIter = startIter + featLen;
 
-				// partial feature
-				vector<FeatureType> f1(startIter, endIter);
-				startIter = imgFeat[pairIdxIntra[i][1]].begin() + featLen * k;
-				endIter = startIter + featLen;
-				vector<FeatureType> f2(startIter, endIter);
+				//// partial feature
+				//vector<FeatureType> f1(startIter, endIter);
+				//startIter = imgFeat[pairIdxIntra[i][1]].begin() + featLen * k;
+				//endIter = startIter + featLen;
+				//vector<FeatureType> f2(startIter, endIter);
 
 
 				// write pairwise feature to file
 				file << 1 << "\t";									// intra pair label = 1
-				write_similarity_to_file(file, f1, f2);
+				write_similarity_to_file(file, imgFeat[pairIdxIntra[i][0]], imgFeat[pairIdxIntra[i][1]], featLen, k);
 			}
 		}
 
@@ -879,6 +1056,34 @@ float pri_feat::similarity_score(float f1, float f2)
 	return val;
 }
 
+inline float pri_feat::similarity_score_2(float f1, float f2)
+{
+	float	val, v1, v2, minVal, maxVal;
+
+	v1 = f1;
+	v2 = f2;
+
+	if (v1 < v2)
+	{
+		minVal = v1;
+		maxVal = v2;
+	}
+	else
+	{
+		minVal = v2;
+		maxVal = v1;
+	}
+
+	if (maxVal == 0 || minVal == 0)
+		val = 0;
+	else
+	{
+		val = minVal / maxVal;
+	}
+
+	return val;
+}
+
 float pri_feat::dist_score(float f1, float f2)
 {
 	float val;
@@ -893,8 +1098,60 @@ float pri_feat::dist_score(float f1, float f2)
 	return val;
 }
 
+float pri_feat::hist_similartity_score(vector<FeatureType> f1, vector<FeatureType> f2)
+{
+	if (f1.size() != f2.size())
+	{
+		printf("Error: histogram size mismatch!\n");
+		exit(ERR_SEE_NOTICE);
+	}
+	float  score = 0;
 
-void pri_feat::write_similarity_to_file(ofstream &file, vector<FeatureType> f1, vector<FeatureType> f2)
+	for (int i = 0; i < f1.size(); i++)
+	{
+		score += similarity_score((float)f1[i], (float)f2[i]);
+	}
+
+	return score;
+}
+
+float pri_feat::hist_similartity_score_2(vector<FeatureType> f1, vector<FeatureType> f2)
+{
+	if (f1.size() != f2.size())
+	{
+		printf("Error: histogram size mismatch!\n");
+		exit(ERR_SEE_NOTICE);
+	}
+	float  score = 0;
+
+	for (int i = 0; i < f1.size(); i++)
+	{
+		score += similarity_score_2(f1[i], f2[i]);
+	}
+
+	return score;
+}
+
+
+float pri_feat::hist_dist_score(vector<FeatureType> f1, vector<FeatureType> f2)
+{
+	if (f1.size() != f2.size())
+	{
+		printf("Error: histogram size mismatch!\n");
+		exit(ERR_SEE_NOTICE);
+	}
+	float  score = 0;
+
+	for (int i = 0; i < f1.size(); i++)
+	{
+		score += dist_score((float)f1[i], (float)f2[i]);
+	}
+
+	return score;
+}
+
+
+void pri_feat::write_similarity_to_file(ofstream &file, vector<FeatureType> f1, vector<FeatureType> f2, int featLen, int k)
 {
 	if (f1.size() != f2.size())
 		return;
@@ -1255,81 +1512,116 @@ void pri_feat::get_combine_image_feature_no_weight(vector<FeatureType> & combFea
 	combFeat.clear();
 
 
-	if (blockWeights.size() == 1 && USE_UNIFIED_MODEL)
-	{
-		// duplicate weights
-		vector<float>	weights = blockWeights[0];
-		for (int i = 1; i < numBlocks; i++)
-			blockWeights.push_back(weights);
-	}
-	else if (blockWeights.size() > 1)
-	{
-		if (blockWeights.size() != numBlocks)
-			exit(ERR_SIZE_MISMATCH);
-	}
-	else
-	{
-		printf("Error: block weights size invalid!\n");
-		exit(ERR_SEE_NOTICE);
-	}
+	size_t	featLen = f1.size() / numBlocks;
 
-	size_t	featLen = blockWeights[0].size();
-	if (featLen * numBlocks != f1.size())
-		exit(ERR_SIZE_MISMATCH);
+	// parameters
+	int		nupper = 4;
+	int		nlower = 2;
+	if (nupper > IMAGE_PARTITION_X)
+		nupper = IMAGE_PARTITION_X;
+
+	if (nlower > IMAGE_PARTITION_X)
+		nlower = IMAGE_PARTITION_X;
 
 	// basic block similarity
 	int		featPtr = 0;
-	for (int i = 0; i < numBlocks; i++)
+	for (int i = 0; i < IMAGE_PARTITION_Y; i++)
 	{
-		float	sim = 0;
-		for (int j = 0; j < featLen; j++)
+		// flexible matching
+		int start = (i - 1) * IMAGE_PARTITION_X;
+		int end = (i + 2) * IMAGE_PARTITION_X - 1;
+		//int start = (i ) * IMAGE_PARTITION_X;
+		//int end = (i + 1) * IMAGE_PARTITION_X - 1;
+
+		// bound
+		if (start < 0)
+			start = 0;
+		if (end > numBlocks)
+			end = numBlocks;
+
+		vector<float> matchScores;
+
+		// forward matching
+		for (int j = 0; j < IMAGE_PARTITION_X; j++)
 		{
-			sim += dist_score((float)f1[featPtr], (float)f2[featPtr]);
-			featPtr++;
+			float bestScore = -1e6;
+			int pos = i * IMAGE_PARTITION_X + j;
+			vector<FeatureType> query(f1.begin() + pos * featLen, f1.begin() + pos * featLen + featLen);
+			// search for every possible match
+			for (int k = start; k < end; k++)
+			{
+				vector<FeatureType> match(f2.begin() + k * featLen, f2.begin() + k * featLen + featLen);
+				float s = hist_similartity_score_2(query, match);
+				if (s > bestScore)
+					bestScore = s;
+			}
+			matchScores.push_back(bestScore);
 		}
-		combFeat.push_back(sim);
+
+		std::sort(matchScores.begin(), matchScores.end());
+		float forwardScore = 0;
+		if (i * 2 < IMAGE_PARTITION_Y)
+		{
+			for (int j = 0; j < nupper; j++)
+			{
+				forwardScore += *(matchScores.rbegin() + j);
+			}
+			forwardScore /= nupper;
+		}
+		else
+		{
+			for (int j = 0; j < nlower; j++)
+			{
+				forwardScore += *(matchScores.rbegin() + j);
+			}
+			forwardScore /= nlower;
+		}
+
+		// backward matching
+		matchScores.clear();
+		for (int j = 0; j < IMAGE_PARTITION_X; j++)
+		{
+			float bestScore = -1e6;
+			int pos = i * IMAGE_PARTITION_X + j;
+			vector<FeatureType> query(f2.begin() + pos * featLen, f2.begin() + pos * featLen + featLen);
+			// search for every possible match
+			for (int k = start; k < end; k++)
+			{
+				vector<FeatureType> match(f1.begin() + k * featLen, f1.begin() + k * featLen + featLen);
+				float s = hist_similartity_score_2(query, match);
+				if (s > bestScore)
+					bestScore = s;
+			}
+			matchScores.push_back(bestScore);
+		}
+
+		std::sort(matchScores.begin(), matchScores.end());
+		float backwardScore = 0;
+		if (i * 2 < IMAGE_PARTITION_Y)
+		{
+			for (int j = 0; j < nupper; j++)
+			{
+				backwardScore += *(matchScores.rbegin() + j);
+			}
+			backwardScore /= nupper;
+		}
+		else
+		{
+			for (int j = 0; j < nlower; j++)
+			{
+				backwardScore += *(matchScores.rbegin() + j);
+			}
+			backwardScore /= nlower;
+		}
+		
+		// how to combine the score?
+		// mean
+		combFeat.push_back((forwardScore + backwardScore) / 2);
+		// min
+		//combFeat.push_back(min(forwardScore, backwardScore));
+		
 	}
 
-	// calculate mean and standard deviation
-	float	sum = std::accumulate(combFeat.begin(), combFeat.end(), 0.f);
-	float	mean = sum / numBlocks;
-	float	accum = 0.0;
-	std::for_each(combFeat.begin(), combFeat.end(),
-		[&](const float d)
-	{
-		accum += (d - mean)*(d - mean);
-	}
-	);
-
-	float stdev = sqrt(accum / numBlocks);
-	combFeat.push_back(mean);
-	combFeat.push_back(stdev);
-
-
-	// try some combination
-	// combination of two blocks, mean and standard dev
-	for (int i = 0; i < numBlocks; i++)
-	for (int j = i + IMAGE_PARTITION_X; j < numBlocks; j += IMAGE_PARTITION_X)
-	{
-		float	sim = (combFeat[i] + combFeat[j]) / 2;
-		float	stdev2 = (combFeat[i] - sim) * (combFeat[i] - sim) + (combFeat[j] - sim) * (combFeat[j] - sim);
-		stdev2 = sqrt(stdev2 / 2);
-		combFeat.push_back(sim);
-		combFeat.push_back(stdev2);
-	}
-	// combination of three blocks
-	for (int i = 0; i < numBlocks; i++)
-	for (int j = i + IMAGE_PARTITION_X; j < numBlocks; j += IMAGE_PARTITION_X)
-	for (int k = j + IMAGE_PARTITION_X; k < numBlocks; k += IMAGE_PARTITION_X)
-	{
-		float	sim = (combFeat[i] + combFeat[j] + combFeat[k]) / 3;
-		float	stdev3 = (combFeat[i] - sim) * (combFeat[i] - sim)
-			+ (combFeat[j] - sim) * (combFeat[j] - sim)
-			+ (combFeat[k] - sim) * (combFeat[k] - sim);
-		stdev3 = sqrt(stdev3 / 3);
-		combFeat.push_back(sim);
-		combFeat.push_back(stdev3);
-	}
 
 }
 
@@ -1729,20 +2021,12 @@ void pri_feat::partition_sort_show()
 	if (imgFeat.size() < 1)
 		return;
 
-	// init
-	if (blockWeights.size() < 1)
-		load_block_weights();
-
-	if (blockWeights.size() < 1)
-	{
-		printf("Error: SVM model weights invalid!\n");
-		exit(ERR_SEE_NOTICE);
-	}
-
-	const int	numPartition = IMAGE_PARTITION_Y * IMAGE_PARTITION_X;
+	const int	numPartition = IMAGE_PARTITION_Y;
 	// sort for each partition
 	for (int i = 0; i < numPersons; i++)
 	{
+
+		cout << i << endl;
 		vector<vector<sort_descend>> search;
 		search.resize(numPartition);
 		int	qIdx = queryIdx[i][0];		// use the first image in each query
@@ -1752,7 +2036,12 @@ void pri_feat::partition_sort_show()
 			int		gIdx = queryIdx[j][k];	// gallery index
 			vector<float>	combFeat;
 			// get lower level score
-			get_combine_image_feature(combFeat, imgFeat[qIdx], imgFeat[gIdx]);
+			get_combine_image_feature_no_weight(combFeat, imgFeat[qIdx], imgFeat[gIdx]);
+
+			//for (int de = 0; de < combFeat.size(); de++)
+			//	cout << combFeat[de];
+			//cout << endl;
+
 			for (int m = 0; m < numPartition; m++)
 			{
 				float	score = combFeat[m];
@@ -1772,6 +2061,39 @@ void pri_feat::partition_sort_show()
 		}
 	}
 
+	cout << "Sorting finished..." << endl;
+
+	// write to file
+	ofstream	file("../../../cache/sorts.trdat", ios::out | ios::trunc);
+	if (!file.is_open())
+	{
+		system("pause");
+		exit(ERR_FILE_UNABLE_TO_OPEN);
+		
+	}
+
+
+	int	ptr = 0;
+	for (int i = 0; i < numPersons; i++)
+	{
+		int qId = queryIdx[i][numShots];
+
+		file << qId << "\t" << endl;
+
+		for (int m = 0; m < numPartition; m++)
+		{
+			for (int j = 0; j < partitionSort[ptr].size(); j++)
+			{
+				file << partitionSort[ptr][j].id << " " << partitionSort[ptr][j].score << " ";
+			}
+			ptr++;
+			file << endl;
+		}
+
+
+	}
+
+	file.close();
 
 	// copy from global ROI
 	Rect				roi = gROI;
@@ -1781,7 +2103,7 @@ void pri_feat::partition_sort_show()
 	//blockHeight = roi.height / IMAGE_PARTITION_Y;
 	//blockWidth = roi.width / IMAGE_PARTITION_X;
 	double	divy = IMAGE_PARTITION_Y - IMAGE_PARTITION_Y * PARTITION_OVERLAP + PARTITION_OVERLAP;
-	double	divx = IMAGE_PARTITION_X - IMAGE_PARTITION_X * PARTITION_OVERLAP + PARTITION_OVERLAP;
+	double	divx = 1 - 1 * PARTITION_OVERLAP + PARTITION_OVERLAP;
 	blockHeight = (int)floor(roi.height / divy);
 	blockWidth = (int)floor(roi.width / divx);
 	int	stepHeight = blockHeight - (int)ceil(blockHeight * PARTITION_OVERLAP);
@@ -1792,7 +2114,7 @@ void pri_feat::partition_sort_show()
 	int		topn = 10;
 	canvas.create(blockHeight * numPartition * 2, blockWidth * (topn + 2) * 2 + 50, imgTmp.type());
 
-	int	ptr = 0;
+	ptr = 0;
 	for (int i = 0; i < numPersons; i++)
 	{
 		canvas.setTo(0);
@@ -1802,12 +2124,12 @@ void pri_feat::partition_sort_show()
 
 		for (int ii = 0; ii < IMAGE_PARTITION_Y; ii++)
 		{
-			for (int jj = 0; jj < IMAGE_PARTITION_X; jj++)
+			for (int jj = 0; jj < 1; jj++)
 			{
 				int		row = roi.y + ii * stepHeight;								// block start y
 				int		col = roi.x + jj * stepWidth;								// block start x
 				Rect	blockROI = Rect(col, row, blockWidth, blockHeight);			// block ROI
-				int		m = ii * IMAGE_PARTITION_X + jj;
+				int		m = ii * 1 + jj;
 				char	textinfo[1000];
 
 				// self
@@ -1829,7 +2151,7 @@ void pri_feat::partition_sort_show()
 					simg(blockROI).copyTo(canvas(Rect(blockWidth * 2 * (n + 1), blockHeight * 2 * m, blockWidth, blockHeight)));
 					sprintf(textinfo, "%.3f", partitionSort[ptr][n].score);
 					putText(canvas, textinfo, Point(blockWidth * 0.1 + blockWidth * 2 * (n + 1), blockHeight * 1.5 + blockHeight * 2 * m),
-						FONT_HERSHEY_SCRIPT_SIMPLEX, 0.4, Scalar(255, 255, 255));
+						FONT_HERSHEY_SCRIPT_SIMPLEX, 0.25, Scalar(255, 255, 255));
 				}
 				
 				// self target
@@ -1850,7 +2172,7 @@ void pri_feat::partition_sort_show()
 
 				sprintf(textinfo, "%d-->%.3f", rank+1, partitionSort[ptr][rank].score);
 				putText(canvas, textinfo, Point(blockWidth * 0.1 + blockWidth * 2 * (topn + 1), blockHeight * 1.5 + blockHeight * 2 * m),
-					FONT_HERSHEY_SCRIPT_SIMPLEX, 0.4, Scalar(255, 255, 255));
+					FONT_HERSHEY_SCRIPT_SIMPLEX, 0.3, Scalar(255, 255, 255));
 
 				ptr++;
 			}
