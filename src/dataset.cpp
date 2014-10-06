@@ -34,7 +34,15 @@ pri_dataset::pri_dataset()
 	m_phase = PHASE_TRAINING;
 
 	if (datasetType == VIPER)
+	{
 		init_viper();
+	}
+	else
+	{
+
+	}
+
+	obtain_rand_blocks();
 }
 
 pri_dataset::pri_dataset(const int phase)
@@ -43,7 +51,15 @@ pri_dataset::pri_dataset(const int phase)
 	m_phase = phase;
 
 	if (datasetType == VIPER)
+	{
 		init_viper();
+	}
+	else
+	{
+
+	}
+
+	obtain_rand_blocks();
 }
 
 pri_dataset::~pri_dataset()
@@ -210,4 +226,121 @@ vector<vector<int>> pri_dataset::get_query_index()
 Rect pri_dataset::get_roi()
 {
 	return gROI;
+}
+
+vector<Rect> pri_dataset::get_rand_blocks()
+{
+	return randBlocks;
+}
+
+void pri_dataset::obtain_rand_blocks()
+{
+	randBlocks.clear();
+
+	if (NEW_RAND_BLOCKS)
+	{
+		srand(time(NULL));
+		while (randBlocks.size() < MAX_NUM_RAND_BLOCKS)
+		{
+			const int bw = MAX_RAND_BLOCK_WIDTH - MIN_RAND_BLOCK_WIDTH + 1;
+			const int bh = MAX_RAND_BLOCK_HEIGHT - MIN_RAND_BLOCK_HEIGHT + 1;
+			int x = rand() % gROI.width + gROI.x;
+			int y = rand() % gROI.height + gROI.y;
+			int	width = rand() % bw + MIN_RAND_BLOCK_WIDTH;
+			int height = rand() % bh + MIN_RAND_BLOCK_HEIGHT;
+
+			if ((x + width < gROI.x + gROI.width) && (y + height < gROI.y + gROI.height))
+			{
+				randBlocks.push_back(Rect(x, y, width, height));
+			}
+		}
+
+		// erase duplicates if any
+		for (int i = 0; i < randBlocks.size(); i++)
+		{
+			for (int j = i + 1; j < randBlocks.size();)
+			{
+				if (randBlocks[i] == randBlocks[j])
+				{
+					randBlocks.erase(randBlocks.begin() + j);
+				}
+				else
+				{
+					j++;
+				}
+			}
+		}
+
+		//save to file
+		string filename;
+		if (datasetType == VIPER)
+		{
+			filename = ROOT_PATH + string("cache/rand_blocks_viper.txt");
+		}
+		else
+		{
+			filename = ROOT_PATH + string("cache/rand_blocks_other.txt");
+		}
+		ofstream fp;
+		fp.open(filename.c_str(), ios::out | ios::trunc);
+		if (!fp.is_open())
+		{
+			printf("Error: can't open file to write blocks!\n");
+			getchar();
+			exit(-1);
+		}
+
+		fp << randBlocks.size() << endl;
+		for (int i = 0; i < randBlocks.size(); i++)
+		{
+			fp << randBlocks[i].x << " ";
+			fp << randBlocks[i].y << " ";
+			fp << randBlocks[i].width << " ";
+			fp << randBlocks[i].height << endl;
+		}
+
+		fp.close();
+	}
+	else
+	{
+		//load from file
+		string filename;
+		if (datasetType == VIPER)
+		{
+			filename = ROOT_PATH + string("cache/rand_blocks_viper.txt");
+		}
+		else
+		{
+			filename = ROOT_PATH + string("cache/rand_blocks_other.txt");
+		}
+		ifstream fp;
+		fp.open(filename.c_str(), ios::in);
+		if (!fp.is_open())
+		{
+			printf("Error: can't open file to read blocks!\n");
+			getchar();
+			exit(-1);
+		}
+
+		int size, x, y, width, height;
+
+		fp >> size;
+
+		if (size > MAX_NUM_RAND_BLOCKS)
+		{
+			size = MAX_NUM_RAND_BLOCKS;
+		}
+
+		for (int i = 0; i < size; i++)
+		{
+			fp >> x;
+			fp >> y;
+			fp >> width;
+			fp >> height;
+			randBlocks.push_back(Rect(x, y, width, height));
+		}
+
+		fp.close();
+
+	}
 }

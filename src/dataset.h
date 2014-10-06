@@ -28,6 +28,13 @@
 #include <vector>
 #include <opencv\cv.h>
 
+#define	MAX_NUM_RAND_BLOCKS		10000
+#define MAX_RAND_BLOCK_WIDTH	20
+#define	MAX_RAND_BLOCK_HEIGHT	30
+#define MIN_RAND_BLOCK_WIDTH	5
+#define	MIN_RAND_BLOCK_HEIGHT	5
+#define	NEW_RAND_BLOCKS			0
+
 
 class pri_dataset
 {
@@ -39,8 +46,9 @@ public:
 	int					num_person();					// return number of individuals
 	int					num_shot();						// return number of shots of each individual
 	std::vector<std::string>		get_filenames();				// return filename list
-	std::vector<std::vector<int>> get_query_index();				// return query index
-	cv::Rect				get_roi();						// return global ROI
+	std::vector<std::vector<int>>	get_query_index();				// return query index
+	cv::Rect						get_roi();						// return global ROI
+	std::vector<cv::Rect>			get_rand_blocks();
 
 private:
 	int					m_phase;						// phase = 1 if training,  0 if testing
@@ -48,6 +56,7 @@ private:
 	int					numPersons;						// number of individuals for current experiment
 	int					numShots;						// number of shots of each individual
 	int					numPersonTotal;					// number of individuals in the entire dataset
+	std::vector<cv::Rect> randBlocks;					// random blocks
 
 	cv::Rect						gROI;							// global ROI for specific dataset
 	std::vector<std::string>		filenames;						// image lists
@@ -55,6 +64,7 @@ private:
 
 	// private functions
 	void init_viper();
+	void obtain_rand_blocks();	
 };
 
 
