@@ -169,6 +169,7 @@ private:
 	float	hist_similartity_score(vector<FeatureType> f1, vector<FeatureType> f2);
 	float	hist_similartity_score_2(vector<FeatureType> f1, vector<FeatureType> f2);
 	float	hist_dist_score(vector<FeatureType> f1, vector<FeatureType> f2);
+	void	strip_score(vector<FeatureType> &stripFeat, vector<FeatureType> f1, vector<FeatureType> f2, int blkLen, int k);
 	void	write_similarity_to_file(ofstream &file, vector<FeatureType> f1, vector<FeatureType> f2, int featLen, int k);	// write similarity to file
 	void	extract_feature_image_kmeans(hkmeans &km);
 	void	get_combine_image_feature(vector<FeatureType> & combFeat, vector<FeatureType> f1, vector<FeatureType> f2);

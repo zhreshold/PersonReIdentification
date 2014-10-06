@@ -24,6 +24,9 @@
 #include <fstream>
 #include <algorithm>
 
+using namespace std;
+using namespace cv;
+
 
 pri_dataset::pri_dataset()
 {
