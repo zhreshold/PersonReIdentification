@@ -110,6 +110,7 @@ void pri_feat::init(pri_dataset &dataset)
 	filenames = dataset.get_filenames();
 	queryIdx = dataset.get_query_index();
 	gROI = dataset.get_roi();
+	randBlocks = dataset.get_rand_blocks();
 
 	// validation check
 	if (queryIdx.size() != numPersons)
@@ -450,6 +451,7 @@ void pri_feat::extract_feature()
 
 	for (int i = 0; i < numPersons; i++)
 	{
+		cout << i << endl;
 		vector<int> query_person = queryIdx[i];
 		for (int j = 0; j < numShots; j++)
 		{
@@ -602,19 +604,36 @@ void pri_feat::extract_feature_image(vector<FeatureType> &feat)
 	cvtColor(image, grayImage, CV_BGR2GRAY);
 
 	feat.clear();
+	blockFeatLength.clear();
+	blockFeatFlag = 0;
 
 	// extract feature in each block
-	for (int i = 0; i < IMAGE_PARTITION_Y; i++)
-	{
-		for (int j = 0; j < IMAGE_PARTITION_X; j++)
-		{
-			int		row = roi.y + i * stepHeight;								// block start y
-			int		col = roi.x + j * stepWidth;								// block start x
-			Rect	blockROI = Rect(col, row, blockWidth, blockHeight);			// block ROI
+	//for (int i = 0; i < IMAGE_PARTITION_Y; i++)
+	//{
+	//	for (int j = 0; j < IMAGE_PARTITION_X; j++)
+	//	{
+	//		int		row = roi.y + i * stepHeight;								// block start y
+	//		int		col = roi.x + j * stepWidth;								// block start x
+	//		Rect	blockROI = Rect(col, row, blockWidth, blockHeight);			// block ROI
 
-			extract_feature_block(blockFeatBuffer, blockROI);
-			feat.insert(feat.end(), blockFeatBuffer.begin(), blockFeatBuffer.end());
+	//		extract_feature_block(blockFeatBuffer, blockROI);
+	//		feat.insert(feat.end(), blockFeatBuffer.begin(), blockFeatBuffer.end());
+	//	}
+	//}
+	for (int i = 0; i < randBlocks.size(); i++)
+	{
+		
+		Rect	blockROI = randBlocks[i];
+
+		extract_feature_block(blockFeatBuffer, blockROI);
+		feat.insert(feat.end(), blockFeatBuffer.begin(), blockFeatBuffer.end());
+
+		if (i == 0 && blockFeatLength.size() == randBlocks.size())
+		{
+			blockFeatFlag = 1;
 		}
+
+
 	}
 
 }
@@ -703,7 +722,7 @@ void pri_feat::extract_feature_block(vector<FeatureType> &blockFeat, Rect blkROI
 
 	// parameters for color histogram
 	vector<double>	colorScales{ 1, 0.75, 0.5 };
-	int				minScale = 3;
+	const int		minScale = 4;
 
 	// Lab Color histograms
 	for (int i = 0; i < colorScales.size(); i++)
@@ -772,12 +791,14 @@ void pri_feat::extract_feature_block(vector<FeatureType> &blockFeat, Rect blkROI
 	Mat labChannel[3];
 	split(labImage(blkROI), labChannel);
 	float*	hogdata = Malloc(float, labChannel[0].rows * labChannel[0].cols);
+	int cellSize = min(40, blkROI.width);
+	cellSize = min(cellSize, blkROI.height);
 	// extract hog in each channel
 	
 	// l
 	for (int i = 0; i < labChannel[0].rows * labChannel[0].cols; i++)
 		hogdata[i] = labChannel[0].data[i];
-	vl_hog_put_image(m_hog, hogdata, labChannel[0].cols, labChannel[0].rows, 1, min(blkROI.width, blkROI.height));
+	vl_hog_put_image(m_hog, hogdata, labChannel[0].cols, labChannel[0].rows, 1, cellSize);
 	int	hogWidth = vl_hog_get_width(m_hog);
 	int hogHeight = vl_hog_get_height(m_hog);
 	int hogDim = vl_hog_get_dimension(m_hog);
@@ -806,7 +827,7 @@ void pri_feat::extract_feature_block(vector<FeatureType> &blockFeat, Rect blkROI
 	// a
 	for (int i = 0; i < labChannel[1].rows * labChannel[1].cols; i++)
 		hogdata[i] = labChannel[1].data[i];
-	vl_hog_put_image(m_hog, hogdata, labChannel[1].cols, labChannel[1].rows, 1, min(blkROI.width, blkROI.height));
+	vl_hog_put_image(m_hog, hogdata, labChannel[1].cols, labChannel[1].rows, 1, cellSize);
 	vl_hog_extract(m_hog, hogArray);
 	normSum = 0;
 	for (int i = 0; i < hogDim * hogWidth * hogHeight; i++)
@@ -829,7 +850,7 @@ void pri_feat::extract_feature_block(vector<FeatureType> &blockFeat, Rect blkROI
 	// b
 	for (int i = 0; i < labChannel[2].rows * labChannel[2].cols; i++)
 		hogdata[i] = labChannel[2].data[i];
-	vl_hog_put_image(m_hog, hogdata, labChannel[2].cols, labChannel[2].rows, 1, min(blkROI.width, blkROI.height));
+	vl_hog_put_image(m_hog, hogdata, labChannel[2].cols, labChannel[2].rows, 1, cellSize);
 	vl_hog_extract(m_hog, hogArray);
 	normSum = 0;
 	for (int i = 0; i < hogDim * hogWidth * hogHeight; i++)
@@ -853,12 +874,16 @@ void pri_feat::extract_feature_block(vector<FeatureType> &blockFeat, Rect blkROI
 	free(hogArray);
 
 	// replace with hkmeans histogram
-	vector<int> histBuff;
-	m_km.encode(&m_km.root, blockFeat, histBuff, blockFeat.size(), 1);
-	blockFeat.clear();
-	for (int i = 0; i < histBuff.size(); i++)
+	//vector<int> histBuff;
+	//m_km.encode(&m_km.root, blockFeat, histBuff, blockFeat.size(), 1);
+	//blockFeat.clear();
+	//for (int i = 0; i < histBuff.size(); i++)
+	//{
+	//	blockFeat.push_back((FeatureType)histBuff[i]);
+	//}
+	if (blockFeatFlag == 0)
 	{
-		blockFeat.push_back((FeatureType)histBuff[i]);
+		blockFeatLength.push_back(blockFeat.size());
 	}
 	
 	
@@ -1442,22 +1467,22 @@ void pri_feat::save_pairwise_feature_image()
 		return;
 	}
 
-	load_block_weights();
+	//load_block_weights();
 	create_pair_index();
 
-	if (blockWeights.size() < 1)
-	{
-		return;
-	}
+	//if (blockWeights.size() < 1)
+	//{
+	//	return;
+	//}
 
-	const int	numPartitions = IMAGE_PARTITION_Y * IMAGE_PARTITION_X;
-	size_t		featLen = imgFeat[0].size() / numPartitions;
+	//const int	numPartitions = IMAGE_PARTITION_Y * IMAGE_PARTITION_X;
+	//size_t		featLen = imgFeat[0].size() / numPartitions;
 
-	if (blockWeights[0].size() != featLen)
-	{
-		printf("Load weights length mismatch!\n");
-		exit(ERR_SEE_NOTICE);
-	}
+	//if (blockWeights[0].size() != featLen)
+	//{
+	//	printf("Load weights length mismatch!\n");
+	//	exit(ERR_SEE_NOTICE);
+	//}
 
 	if (pairIdxIntra.size() < 1 || pairIdxInter.size() < 1)
 		create_pair_index();
@@ -1470,8 +1495,12 @@ void pri_feat::save_pairwise_feature_image()
 	// intra pairs first
 	for (int i = 0; i < pairIdxIntra.size(); i++)
 	{
+		cout << "Intra " << i << endl;
 		vector<float>	combFeat;
-		get_combine_image_feature(combFeat, imgFeat[pairIdxIntra[i][0]], imgFeat[pairIdxIntra[i][1]]);
+		//get_combine_image_feature(combFeat, imgFeat[pairIdxIntra[i][0]], imgFeat[pairIdxIntra[i][1]]);
+		image = imread(filenames[pairIdxIntra[i][1]], 1);
+		cvtColor(image, labImage, CV_BGR2Lab);
+		get_pairwise_image_feature_rand(combFeat, imgFeat[pairIdxIntra[i][0]]);
 		file << 1 << "\t";		// intra label 1
 		for (int j = 0; j < combFeat.size(); j++)
 			file << j + 1 << ":" << combFeat[j] << " ";
@@ -1481,8 +1510,11 @@ void pri_feat::save_pairwise_feature_image()
 	// then inter pairs
 	for (int i = 0; i < pairIdxInter.size(); i++)
 	{
+		cout << "Inter " << i << endl;
 		vector<float>	combFeat;
-		get_combine_image_feature(combFeat, imgFeat[pairIdxInter[i][0]], imgFeat[pairIdxInter[i][1]]);
+		image = imread(filenames[pairIdxInter[i][1]], 1);
+		cvtColor(image, labImage, CV_BGR2Lab);
+		get_pairwise_image_feature_rand(combFeat, imgFeat[pairIdxInter[i][0]]);
 		file << -1 << "\t";		// inter label -1
 		for (int j = 0; j < combFeat.size(); j++)
 			file << j + 1 << ":" << combFeat[j] << " ";
@@ -1542,6 +1574,8 @@ void pri_feat::get_combine_image_feature(vector<FeatureType> & combFeat, vector<
 		}
 		combFeat.push_back(score);
 	}
+
+
 }
 
 
@@ -1670,17 +1704,65 @@ void pri_feat::get_combine_image_feature_no_weight(vector<FeatureType> & combFea
 
 }
 
+void pri_feat::get_pairwise_image_feature_rand(vector<FeatureType> &pairFeat, vector<FeatureType> f1)
+{
+	if (f1.size() < 1)
+		return;
+
+	pairFeat.clear();
+
+	// parameter
+	const int searchOffset = 12;
+	const int step = 4;
+
+	
+	auto featPtr = f1.begin();
+	for (int i = 0; i < randBlocks.size(); i++)
+	{
+		int featLen = blockFeatLength[i];
+		vector<FeatureType> f(featPtr, featPtr + featLen);
+		vector<FeatureType> searchFeat;
+		Rect block = randBlocks[i];
+
+		// search the entire region for best match
+		int x1 = gROI.x;
+		int x2 = x1 + gROI.width;
+		int y1 = max(gROI.y, block.y - searchOffset);
+		int y2 = min(gROI.y + gROI.height, block.y + block.height + searchOffset);
+
+		float	bestScore = -1;
+		for (int row = y1; row < y2 - block.height; row += step)
+		{
+			for (int col = x1; col < x2 - block.width; col += step)
+			{
+				Rect searchBlk = Rect(col, row, block.width, block.height);
+				extract_feature_block(searchFeat, searchBlk);
+
+				float score = hist_similartity_score_2(f, searchFeat);
+
+				if (score > bestScore)
+				{
+					bestScore = score;
+				}
+			}
+		}
+
+		pairFeat.push_back(bestScore);
+
+
+		featPtr += featLen;
+	}
+}
+
 float pri_feat::image_pairwise_score(int idx1, int idx2)
 {
 
 	// init
-	if (blockWeights.size() < 1)
-		load_block_weights();
 
 	if (imageWeights.size() < 1)
 		load_image_weights();
 
-	if (blockWeights.size() < 1 || imageWeights.size() < 1)
+	if ( imageWeights.size() < 1)
 	{
 		printf("Error: SVM model weights invalid!\n");
 		exit(ERR_SEE_NOTICE);
@@ -1690,8 +1772,10 @@ float pri_feat::image_pairwise_score(int idx1, int idx2)
 	vector<float>	combFeat;
 
 	// get lower level score
-	get_combine_image_feature(combFeat, imgFeat[idx1], imgFeat[idx2]);
-
+	image = imread(filenames[idx2], 1);
+	cvtColor(image, labImage, CV_BGR2Lab);
+	get_pairwise_image_feature_rand(combFeat, imgFeat[idx1]);
+	
 	float	score = 0;
 	for (int i = 0; i < imageWeights.size(); i++)
 		score += combFeat[i] * imageWeights[i];
@@ -1712,6 +1796,7 @@ void pri_feat::rank_cmc()
 
 	for (int i = 0; i < numPersons; i++)
 	{
+		cout << "Ranking " << i << "th person" << endl;
 		vector<sort_descend> search;
 		int	qIdx = queryIdx[i][0];		// use the first image in each query
 		for (int j = 0; j < numPersons; j++)

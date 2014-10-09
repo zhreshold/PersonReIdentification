@@ -28,7 +28,7 @@
 #include <vector>
 #include <opencv\cv.h>
 
-#define	MAX_NUM_RAND_BLOCKS		10000
+#define	MAX_NUM_RAND_BLOCKS		500
 #define MAX_RAND_BLOCK_WIDTH	20
 #define	MAX_RAND_BLOCK_HEIGHT	30
 #define MIN_RAND_BLOCK_WIDTH	5

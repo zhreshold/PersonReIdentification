@@ -55,9 +55,10 @@ int	main()
 		pri_feat	featNewGMM(0);
 
 		featNewGMM.init_new_gmm(wholeDataset);
+		system("pause");
+		return(0);
 	}
-	//system("pause");
-	//return(0);
+
 
 	pri_dataset		dataset(PHASE_TRAINING);
 	pri_feat		feature;
@@ -68,19 +69,19 @@ int	main()
 	cout << "Extracting image features..." << endl;
 	feature.extract_feature();
 
-	cout << "Save pairwise block feature to files..." << endl;
-	feature.save_pairwise_feature_block();
+	//cout << "Save pairwise block feature to files..." << endl;
+	//feature.save_pairwise_feature_block();
 
-	cout << "Training block-wise SVM models..." << endl;
-	feature.train_block_models();
+	//cout << "Training block-wise SVM models..." << endl;
+	//feature.train_block_models();
 
 	
 
-	//cout << "Save pairwise image feature to file..." << endl;
-	//feature.save_pairwise_feature_image();
+	cout << "Save pairwise image feature to file..." << endl;
+	feature.save_pairwise_feature_image();
 
-	//cout << "Training image SVM model..." << endl;
-	//feature.train_image_model();
+	cout << "Training image SVM model..." << endl;
+	feature.train_image_model();
 
 
 

@@ -130,6 +130,9 @@ private:
 	VlHog*						m_hog;						// hog
 	vector<vector<float>>		blockWeights;				// block-wise SVM weights, DIM = (numBlocks x dim) or ( 1 x dim) if use unified model
 	vector<float>				imageWeights;				// image-wise SVM weights
+	vector<Rect>				randBlocks;
+	vector<int>					blockFeatLength;
+	int							blockFeatFlag;
 	hkmeans						m_km;
 
 	int							numPersons;					// number of individuals for current experiment
@@ -174,6 +177,7 @@ private:
 	void	extract_feature_image_kmeans(hkmeans &km);
 	void	get_combine_image_feature(vector<FeatureType> & combFeat, vector<FeatureType> f1, vector<FeatureType> f2);
 	void    get_combine_image_feature_no_weight(vector<FeatureType> & combFeat, vector<FeatureType> f1, vector<FeatureType> f2);
+	void	get_pairwise_image_feature_rand(vector<FeatureType> &pairFeat, vector<FeatureType> f1);
 	float	image_pairwise_score(int idx1, int idx2);
 	
 	

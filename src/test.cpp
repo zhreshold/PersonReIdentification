@@ -41,17 +41,17 @@ int	main()
 	//cout << "Saving partition sorts..." << endl;
 	//feature.partition_sort();
 
-	//cout << "Matching query images in gallery..." << endl;
-	//feature.rank_cmc();
+	cout << "Matching query images in gallery..." << endl;
+	feature.rank_cmc();
 
-	//// display some results
-	//cout << "Rank 1 : " << feature.get_rank_n(1) * 100 << endl;
-	//cout << "Rank 5 : " << feature.get_rank_n(5) * 100 << endl;
-	//cout << "Rank 10 : " << feature.get_rank_n(10) * 100 << endl;
-	//cout << "Rank 20 : " << feature.get_rank_n(20) * 100 << endl;
-	//cout << "Rank 50 : " << feature.get_rank_n(50) * 100 << endl;
-	//cout << "Rank 100 : " << feature.get_rank_n(100) * 100 << endl;
-	//cout << "Rank 316 : " << feature.get_rank_n(316) * 100 << endl;
+	// display some results
+	cout << "Rank 1 : " << feature.get_rank_n(1) * 100 << endl;
+	cout << "Rank 5 : " << feature.get_rank_n(5) * 100 << endl;
+	cout << "Rank 10 : " << feature.get_rank_n(10) * 100 << endl;
+	cout << "Rank 20 : " << feature.get_rank_n(20) * 100 << endl;
+	cout << "Rank 50 : " << feature.get_rank_n(50) * 100 << endl;
+	cout << "Rank 100 : " << feature.get_rank_n(100) * 100 << endl;
+	cout << "Rank 316 : " << feature.get_rank_n(316) * 100 << endl;
 
 #if DEV_DEBUG
 	cout << "Debug partition sort..." << endl;
