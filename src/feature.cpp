@@ -1515,13 +1515,13 @@ void pri_feat::get_combine_image_feature_no_weight(vector<FeatureType> & combFea
 	size_t	featLen = f1.size() / numBlocks;
 
 	// parameters
-	int		nupper = 4;
-	int		nlower = 2;
-	if (nupper > IMAGE_PARTITION_X)
-		nupper = IMAGE_PARTITION_X;
+	//int		nupper = 4;
+	//int		nlower = 2;
+	//if (nupper > IMAGE_PARTITION_X)
+	//	nupper = IMAGE_PARTITION_X;
 
-	if (nlower > IMAGE_PARTITION_X)
-		nlower = IMAGE_PARTITION_X;
+	//if (nlower > IMAGE_PARTITION_X)
+	//	nlower = IMAGE_PARTITION_X;
 
 	// basic block similarity
 	int		featPtr = 0;
@@ -1539,7 +1539,7 @@ void pri_feat::get_combine_image_feature_no_weight(vector<FeatureType> & combFea
 		if (end > numBlocks)
 			end = numBlocks;
 
-		vector<float> matchScores;
+		//vector<float> matchScores;
 
 		// forward matching
 		for (int j = 0; j < IMAGE_PARTITION_X; j++)
@@ -1555,70 +1555,71 @@ void pri_feat::get_combine_image_feature_no_weight(vector<FeatureType> & combFea
 				if (s > bestScore)
 					bestScore = s;
 			}
-			matchScores.push_back(bestScore);
+			//matchScores.push_back(bestScore);
+			combFeat.push_back(bestScore);
 		}
 
-		std::sort(matchScores.begin(), matchScores.end());
-		float forwardScore = 0;
-		if (i * 2 < IMAGE_PARTITION_Y)
-		{
-			for (int j = 0; j < nupper; j++)
-			{
-				forwardScore += *(matchScores.rbegin() + j);
-			}
-			forwardScore /= nupper;
-		}
-		else
-		{
-			for (int j = 0; j < nlower; j++)
-			{
-				forwardScore += *(matchScores.rbegin() + j);
-			}
-			forwardScore /= nlower;
-		}
+		//std::sort(matchScores.begin(), matchScores.end());
+		//float forwardScore = 0;
+		//if (i * 2 < IMAGE_PARTITION_Y)
+		//{
+		//	for (int j = 0; j < nupper; j++)
+		//	{
+		//		forwardScore += *(matchScores.rbegin() + j);
+		//	}
+		//	forwardScore /= nupper;
+		//}
+		//else
+		//{
+		//	for (int j = 0; j < nlower; j++)
+		//	{
+		//		forwardScore += *(matchScores.rbegin() + j);
+		//	}
+		//	forwardScore /= nlower;
+		//}
 
-		// backward matching
-		matchScores.clear();
-		for (int j = 0; j < IMAGE_PARTITION_X; j++)
-		{
-			float bestScore = -1e6;
-			int pos = i * IMAGE_PARTITION_X + j;
-			vector<FeatureType> query(f2.begin() + pos * featLen, f2.begin() + pos * featLen + featLen);
-			// search for every possible match
-			for (int k = start; k < end; k++)
-			{
-				vector<FeatureType> match(f1.begin() + k * featLen, f1.begin() + k * featLen + featLen);
-				float s = hist_similartity_score_2(query, match);
-				if (s > bestScore)
-					bestScore = s;
-			}
-			matchScores.push_back(bestScore);
-		}
+		//// backward matching
+		//matchScores.clear();
+		//for (int j = 0; j < IMAGE_PARTITION_X; j++)
+		//{
+		//	float bestScore = -1e6;
+		//	int pos = i * IMAGE_PARTITION_X + j;
+		//	vector<FeatureType> query(f2.begin() + pos * featLen, f2.begin() + pos * featLen + featLen);
+		//	// search for every possible match
+		//	for (int k = start; k < end; k++)
+		//	{
+		//		vector<FeatureType> match(f1.begin() + k * featLen, f1.begin() + k * featLen + featLen);
+		//		float s = hist_similartity_score_2(query, match);
+		//		if (s > bestScore)
+		//			bestScore = s;
+		//	}
+		//	matchScores.push_back(bestScore);
+		//}
 
-		std::sort(matchScores.begin(), matchScores.end());
-		float backwardScore = 0;
-		if (i * 2 < IMAGE_PARTITION_Y)
-		{
-			for (int j = 0; j < nupper; j++)
-			{
-				backwardScore += *(matchScores.rbegin() + j);
-			}
-			backwardScore /= nupper;
-		}
-		else
-		{
-			for (int j = 0; j < nlower; j++)
-			{
-				backwardScore += *(matchScores.rbegin() + j);
-			}
-			backwardScore /= nlower;
-		}
-		
-		// how to combine the score?
-		// mean
-		combFeat.push_back((forwardScore + backwardScore) / 2);
-		// min
-		//combFeat.push_back(min(forwardScore, backwardScore));
+		//std::sort(matchScores.begin(), matchScores.end());
+		//float backwardScore = 0;
+		//if (i * 2 < IMAGE_PARTITION_Y)
+		//{
+		//	for (int j = 0; j < nupper; j++)
+		//	{
+		//		backwardScore += *(matchScores.rbegin() + j);
+		//	}
+		//	backwardScore /= nupper;
+		//}
+		//else
+		//{
+		//	for (int j = 0; j < nlower; j++)
+		//	{
+		//		backwardScore += *(matchScores.rbegin() + j);
+		//	}
+		//	backwardScore /= nlower;
+		//}
+		//
+		//// how to combine the score?
+		//// mean
+		//combFeat.push_back((forwardScore + backwardScore) / 2);
+		//// min
+		////combFeat.push_back(min(forwardScore, backwardScore));
 		
 	}
 

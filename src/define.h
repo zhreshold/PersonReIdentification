@@ -78,11 +78,11 @@ enum DATASET_TYPES
 #define	DATASET_TYPE			VIPER				// VIPER, CUHK01...
 #define	NUM_PERSON_TRAIN		316					// number of individuals used for train
 #define	IMAGE_PARTITION_X		7					// number of partitions along x
-#define	IMAGE_PARTITION_Y		20					// number of partitions along y
+#define	IMAGE_PARTITION_Y		15					// number of partitions along y
 #define	PARTITION_OVERLAP		0.5					// percentage of overlapping
 
 // kmeans
-#define	NEW_KMEANS_CENTERS		1					// 1: train new centers
+#define	NEW_KMEANS_CENTERS		0					// 1: train new centers
 
 // local descriptor & GMM model
 #define	LD_DIM					15					// local descriptor dimension
