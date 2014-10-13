@@ -101,7 +101,7 @@ public:
 	void	init(pri_dataset &dataset);
 	void	init_new_gmm(pri_dataset &dataset);
 	void	extract_feature();
-	void	save_pairwise_feature_block();						// save pair-wise feature to files
+	//void	save_pairwise_feature_block();						// save pair-wise feature to files
 	void	save_pairwise_feature_image();						// save combined block feature as image feature
 	void	train_block_models();
 	void	load_block_weights();

@@ -891,142 +891,142 @@ int	pri_feat::collect_local_descriptors()
 	return 0;
 }
 
-void pri_feat::save_pairwise_feature_block()
-{
-	if (imgFeat.size() < 1)
-	{
-		return;
-	}
-
-	create_pair_index();
-
-	const int	numPartitions = IMAGE_PARTITION_Y * IMAGE_PARTITION_X;
-	size_t		featLen = imgFeat[0].size() / numPartitions;
-	string		path = ROOT_PATH + string("cache/");
-
-	if (USE_UNIFIED_MODEL)
-	{
-		ofstream	file(path + "blocks.trdat", ios::out | ios::trunc);
-		if (!file.is_open())
-			exit(ERR_FILE_UNABLE_TO_OPEN);
-
-		// intra pairs first
-		for (int i = 0; i < pairIdxIntra.size(); i++)
-		{
-			// switch regions to operate
-			for (int k = 0; k < numPartitions; k++)
-			{
-				//// feature range
-				//vector<FeatureType>::iterator	startIter = imgFeat[pairIdxIntra[i][0]].begin() + featLen * k;
-				//vector<FeatureType>::iterator	endIter = startIter + featLen;
-
-				//// partial feature
-				//vector<FeatureType> f1(startIter, endIter);
-				//startIter = imgFeat[pairIdxIntra[i][1]].begin() + featLen * k;
-				//endIter = startIter + featLen;
-				//vector<FeatureType> f2(startIter, endIter);
-
-
-				// write pairwise feature to file
-				file << 1 << "\t";									// intra pair label = 1
-				write_similarity_to_file(file, imgFeat[pairIdxIntra[i][0]], imgFeat[pairIdxIntra[i][1]], featLen, k);
-			}
-		}
-
-		// then inter pairs
-		for (int i = 0; i < pairIdxInter.size(); i++)
-		{
-			// switch regions to operate
-			for (int k = 0; k < numPartitions; k++)
-			{
-				// feature range
-				vector<FeatureType>::iterator	startIter = imgFeat[pairIdxInter[i][0]].begin() + featLen * k;
-				vector<FeatureType>::iterator	endIter = startIter + featLen;
-
-				// partial feature
-				vector<FeatureType> f1(startIter, endIter);
-				startIter = imgFeat[pairIdxInter[i][1]].begin() + featLen * k;
-				endIter = startIter + featLen;
-				vector<FeatureType> f2(startIter, endIter);
-
-
-				// write pairwise feature to file
-				file << -1 << "\t";									// inter pair label = 0
-				write_similarity_to_file(file, f1, f2);
-			}
-		}
-
-		file.close();
-	}
-	else
-	{
-		vector<ofstream> fileList;
-		fileList.resize(numPartitions);
-		char filename[260];
-
-		// open files to write
-		for (int i = 0; i < numPartitions; i++)
-		{
-			sprintf(filename, "block_%d.trdat", i);
-			fileList[i].open(path + filename, ios::out | ios::trunc);
-			if (!fileList[i].is_open())
-				exit(ERR_FILE_UNABLE_TO_OPEN);
-		}
-
-
-		// intra pairs first
-		for (int i = 0; i < pairIdxIntra.size(); i++)
-		{
-			// switch regions to operate
-			for (int k = 0; k < numPartitions; k++)
-			{
-				// feature range
-				vector<FeatureType>::iterator	startIter = imgFeat[pairIdxIntra[i][0]].begin() + featLen * k;
-				vector<FeatureType>::iterator	endIter = startIter + featLen;
-
-				// partial feature
-				vector<FeatureType> f1(startIter, endIter);
-				startIter = imgFeat[pairIdxIntra[i][1]].begin() + featLen * k;
-				endIter = startIter + featLen;
-				vector<FeatureType> f2(startIter, endIter);
-
-
-				// write pairwise feature to file
-				fileList[k] << 1 << "\t";									// intra pair label = 1
-				write_similarity_to_file(fileList[k], f1, f2);
-			}
-		}
-
-		// then inter pairs
-		for (int i = 0; i < pairIdxInter.size(); i++)
-		{
-			// switch regions to operate
-			for (int k = 0; k < numPartitions; k++)
-			{
-				// feature range
-				vector<FeatureType>::iterator	startIter = imgFeat[pairIdxInter[i][0]].begin() + featLen * k;
-				vector<FeatureType>::iterator	endIter = startIter + featLen;
-
-				// partial feature
-				vector<FeatureType> f1(startIter, endIter);
-				startIter = imgFeat[pairIdxInter[i][1]].begin() + featLen * k;
-				endIter = startIter + featLen;
-				vector<FeatureType> f2(startIter, endIter);
-
-
-				// write pairwise feature to file
-				fileList[k] << -1 << "\t";									// inter pair label = 0
-				write_similarity_to_file(fileList[k], f1, f2);
-			}
-		}
-
-		// close files
-		for (int i = 0; i < numPartitions; i++)
-		{
-			fileList[i].close();
-		}
-	}
-}
+//void pri_feat::save_pairwise_feature_block()
+//{
+//	if (imgFeat.size() < 1)
+//	{
+//		return;
+//	}
+//
+//	create_pair_index();
+//
+//	const int	numPartitions = IMAGE_PARTITION_Y * IMAGE_PARTITION_X;
+//	size_t		featLen = imgFeat[0].size() / numPartitions;
+//	string		path = ROOT_PATH + string("cache/");
+//
+//	if (USE_UNIFIED_MODEL)
+//	{
+//		ofstream	file(path + "blocks.trdat", ios::out | ios::trunc);
+//		if (!file.is_open())
+//			exit(ERR_FILE_UNABLE_TO_OPEN);
+//
+//		// intra pairs first
+//		for (int i = 0; i < pairIdxIntra.size(); i++)
+//		{
+//			// switch regions to operate
+//			for (int k = 0; k < numPartitions; k++)
+//			{
+//				//// feature range
+//				//vector<FeatureType>::iterator	startIter = imgFeat[pairIdxIntra[i][0]].begin() + featLen * k;
+//				//vector<FeatureType>::iterator	endIter = startIter + featLen;
+//
+//				//// partial feature
+//				//vector<FeatureType> f1(startIter, endIter);
+//				//startIter = imgFeat[pairIdxIntra[i][1]].begin() + featLen * k;
+//				//endIter = startIter + featLen;
+//				//vector<FeatureType> f2(startIter, endIter);
+//
+//
+//				// write pairwise feature to file
+//				file << 1 << "\t";									// intra pair label = 1
+//				write_similarity_to_file(file, imgFeat[pairIdxIntra[i][0]], imgFeat[pairIdxIntra[i][1]], featLen, k);
+//			}
+//		}
+//
+//		// then inter pairs
+//		for (int i = 0; i < pairIdxInter.size(); i++)
+//		{
+//			// switch regions to operate
+//			for (int k = 0; k < numPartitions; k++)
+//			{
+//				// feature range
+//				vector<FeatureType>::iterator	startIter = imgFeat[pairIdxInter[i][0]].begin() + featLen * k;
+//				vector<FeatureType>::iterator	endIter = startIter + featLen;
+//
+//				// partial feature
+//				vector<FeatureType> f1(startIter, endIter);
+//				startIter = imgFeat[pairIdxInter[i][1]].begin() + featLen * k;
+//				endIter = startIter + featLen;
+//				vector<FeatureType> f2(startIter, endIter);
+//
+//
+//				// write pairwise feature to file
+//				file << -1 << "\t";									// inter pair label = 0
+//				write_similarity_to_file(file, f1, f2);
+//			}
+//		}
+//
+//		file.close();
+//	}
+//	else
+//	{
+//		vector<ofstream> fileList;
+//		fileList.resize(numPartitions);
+//		char filename[260];
+//
+//		// open files to write
+//		for (int i = 0; i < numPartitions; i++)
+//		{
+//			sprintf(filename, "block_%d.trdat", i);
+//			fileList[i].open(path + filename, ios::out | ios::trunc);
+//			if (!fileList[i].is_open())
+//				exit(ERR_FILE_UNABLE_TO_OPEN);
+//		}
+//
+//
+//		// intra pairs first
+//		for (int i = 0; i < pairIdxIntra.size(); i++)
+//		{
+//			// switch regions to operate
+//			for (int k = 0; k < numPartitions; k++)
+//			{
+//				// feature range
+//				vector<FeatureType>::iterator	startIter = imgFeat[pairIdxIntra[i][0]].begin() + featLen * k;
+//				vector<FeatureType>::iterator	endIter = startIter + featLen;
+//
+//				// partial feature
+//				vector<FeatureType> f1(startIter, endIter);
+//				startIter = imgFeat[pairIdxIntra[i][1]].begin() + featLen * k;
+//				endIter = startIter + featLen;
+//				vector<FeatureType> f2(startIter, endIter);
+//
+//
+//				// write pairwise feature to file
+//				fileList[k] << 1 << "\t";									// intra pair label = 1
+//				write_similarity_to_file(fileList[k], f1, f2);
+//			}
+//		}
+//
+//		// then inter pairs
+//		for (int i = 0; i < pairIdxInter.size(); i++)
+//		{
+//			// switch regions to operate
+//			for (int k = 0; k < numPartitions; k++)
+//			{
+//				// feature range
+//				vector<FeatureType>::iterator	startIter = imgFeat[pairIdxInter[i][0]].begin() + featLen * k;
+//				vector<FeatureType>::iterator	endIter = startIter + featLen;
+//
+//				// partial feature
+//				vector<FeatureType> f1(startIter, endIter);
+//				startIter = imgFeat[pairIdxInter[i][1]].begin() + featLen * k;
+//				endIter = startIter + featLen;
+//				vector<FeatureType> f2(startIter, endIter);
+//
+//
+//				// write pairwise feature to file
+//				fileList[k] << -1 << "\t";									// inter pair label = 0
+//				write_similarity_to_file(fileList[k], f1, f2);
+//			}
+//		}
+//
+//		// close files
+//		for (int i = 0; i < numPartitions; i++)
+//		{
+//			fileList[i].close();
+//		}
+//	}
+//}
 
 float pri_feat::similarity_score(float f1, float f2)
 {
@@ -1358,22 +1358,22 @@ void pri_feat::save_pairwise_feature_image()
 		return;
 	}
 
-	load_block_weights();
+	//load_block_weights();
 	create_pair_index();
 
-	if (blockWeights.size() < 1)
-	{
-		return;
-	}
+	//if (blockWeights.size() < 1)
+	//{
+	//	return;
+	//}
 
 	const int	numPartitions = IMAGE_PARTITION_Y * IMAGE_PARTITION_X;
 	size_t		featLen = imgFeat[0].size() / numPartitions;
 
-	if (blockWeights[0].size() != featLen)
-	{
-		printf("Load weights length mismatch!\n");
-		exit(ERR_SEE_NOTICE);
-	}
+	//if (blockWeights[0].size() != featLen)
+	//{
+	//	printf("Load weights length mismatch!\n");
+	//	exit(ERR_SEE_NOTICE);
+	//}
 
 	if (pairIdxIntra.size() < 1 || pairIdxInter.size() < 1)
 		create_pair_index();
@@ -1386,8 +1386,16 @@ void pri_feat::save_pairwise_feature_image()
 	// intra pairs first
 	for (int i = 0; i < pairIdxIntra.size(); i++)
 	{
+		cout << "Intra: " << i << endl;
 		vector<float>	combFeat;
-		get_combine_image_feature(combFeat, imgFeat[pairIdxIntra[i][0]], imgFeat[pairIdxIntra[i][1]]);
+		get_combine_image_feature_no_weight(combFeat, imgFeat[pairIdxIntra[i][0]], imgFeat[pairIdxIntra[i][1]]);
+		file << 1 << "\t";		// intra label 1
+		for (int j = 0; j < combFeat.size(); j++)
+			file << j + 1 << ":" << combFeat[j] << " ";
+		file << endl;
+
+		// backward direction
+		get_combine_image_feature_no_weight(combFeat, imgFeat[pairIdxIntra[i][1]], imgFeat[pairIdxIntra[i][0]]);
 		file << 1 << "\t";		// intra label 1
 		for (int j = 0; j < combFeat.size(); j++)
 			file << j + 1 << ":" << combFeat[j] << " ";
@@ -1397,8 +1405,16 @@ void pri_feat::save_pairwise_feature_image()
 	// then inter pairs
 	for (int i = 0; i < pairIdxInter.size(); i++)
 	{
+		cout << "Inter: " << i << endl;
 		vector<float>	combFeat;
-		get_combine_image_feature(combFeat, imgFeat[pairIdxInter[i][0]], imgFeat[pairIdxInter[i][1]]);
+		get_combine_image_feature_no_weight(combFeat, imgFeat[pairIdxInter[i][0]], imgFeat[pairIdxInter[i][1]]);
+		file << -1 << "\t";		// inter label -1
+		for (int j = 0; j < combFeat.size(); j++)
+			file << j + 1 << ":" << combFeat[j] << " ";
+		file << endl;
+
+		// backward direction
+		get_combine_image_feature_no_weight(combFeat, imgFeat[pairIdxInter[i][1]], imgFeat[pairIdxInter[i][0]]);
 		file << -1 << "\t";		// inter label -1
 		for (int j = 0; j < combFeat.size(); j++)
 			file << j + 1 << ":" << combFeat[j] << " ";
@@ -1622,6 +1638,25 @@ void pri_feat::get_combine_image_feature_no_weight(vector<FeatureType> & combFea
 		////combFeat.push_back(min(forwardScore, backwardScore));
 		
 	}
+
+	// 2-d correlated feature
+	vector<FeatureType> featTmp;
+	for (int i = 0; i < combFeat.size(); i++)
+	{
+		for (int j = i + 1; j < combFeat.size(); j++)
+		{
+			// feature? si/sj
+			float	si = combFeat[i];
+			float	sj = combFeat[j];
+
+			if (sj == 0)
+			{
+				sj = 0.1;
+			}
+			featTmp.push_back(si / sj);
+		}
+	}
+	combFeat = featTmp;
 
 
 }
