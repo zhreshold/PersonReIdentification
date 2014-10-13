@@ -28,9 +28,6 @@
 #include <vector>
 #include <opencv\cv.h>
 
-using namespace std;
-using namespace cv;
-
 
 class pri_dataset
 {
@@ -41,9 +38,9 @@ public:
 
 	int					num_person();					// return number of individuals
 	int					num_shot();						// return number of shots of each individual
-	vector<string>		get_filenames();				// return filename list
-	vector<vector<int>> get_query_index();				// return query index
-	Rect				get_roi();						// return global ROI
+	std::vector<std::string>		get_filenames();				// return filename list
+	std::vector<std::vector<int>> get_query_index();				// return query index
+	cv::Rect				get_roi();						// return global ROI
 
 private:
 	int					m_phase;						// phase = 1 if training,  0 if testing
@@ -51,9 +48,10 @@ private:
 	int					numPersons;						// number of individuals for current experiment
 	int					numShots;						// number of shots of each individual
 	int					numPersonTotal;					// number of individuals in the entire dataset
-	Rect				gROI;							// global ROI for specific dataset
-	vector<string>		filenames;						// image lists
-	vector<vector<int>> queryIdx;						// index of images used for experiment, DIM = (num_person) x ( num_shots)
+
+	cv::Rect						gROI;							// global ROI for specific dataset
+	std::vector<std::string>		filenames;						// image lists
+	std::vector<std::vector<int>>	queryIdx;						// index of images used for experiment, DIM = (num_person) x ( num_shots)
 
 	// private functions
 	void init_viper();
