@@ -900,8 +900,8 @@ void pri_feat::save_pairwise_feature_block()
 
 	create_pair_index();
 
-	const int	numPartitions = IMAGE_PARTITION_Y;
-	size_t		featLen = imgFeat[0].size() / IMAGE_PARTITION_Y / IMAGE_PARTITION_X;
+	const int	numPartitions = IMAGE_PARTITION_Y * IMAGE_PARTITION_X;
+	size_t		featLen = imgFeat[0].size() / numPartitions;
 	string		path = ROOT_PATH + string("cache/");
 
 	if (USE_UNIFIED_MODEL)
@@ -913,7 +913,6 @@ void pri_feat::save_pairwise_feature_block()
 		// intra pairs first
 		for (int i = 0; i < pairIdxIntra.size(); i++)
 		{
-			cout << "Intra: " << i << endl;
 			// switch regions to operate
 			for (int k = 0; k < numPartitions; k++)
 			{
@@ -937,24 +936,23 @@ void pri_feat::save_pairwise_feature_block()
 		// then inter pairs
 		for (int i = 0; i < pairIdxInter.size(); i++)
 		{
-			cout << "Inter: " << i << endl;
 			// switch regions to operate
 			for (int k = 0; k < numPartitions; k++)
 			{
 				// feature range
-				//vector<FeatureType>::iterator	startIter = imgFeat[pairIdxInter[i][0]].begin() + featLen * k;
-				//vector<FeatureType>::iterator	endIter = startIter + featLen;
+				vector<FeatureType>::iterator	startIter = imgFeat[pairIdxInter[i][0]].begin() + featLen * k;
+				vector<FeatureType>::iterator	endIter = startIter + featLen;
 
-				//// partial feature
-				//vector<FeatureType> f1(startIter, endIter);
-				//startIter = imgFeat[pairIdxInter[i][1]].begin() + featLen * k;
-				//endIter = startIter + featLen;
-				//vector<FeatureType> f2(startIter, endIter);
+				// partial feature
+				vector<FeatureType> f1(startIter, endIter);
+				startIter = imgFeat[pairIdxInter[i][1]].begin() + featLen * k;
+				endIter = startIter + featLen;
+				vector<FeatureType> f2(startIter, endIter);
 
 
 				// write pairwise feature to file
 				file << -1 << "\t";									// inter pair label = 0
-				write_similarity_to_file(file, imgFeat[pairIdxInter[i][0]], imgFeat[pairIdxInter[i][1]], featLen, k);
+				write_similarity_to_file(file, f1, f2);
 			}
 		}
 
@@ -962,71 +960,71 @@ void pri_feat::save_pairwise_feature_block()
 	}
 	else
 	{
-		//vector<ofstream> fileList;
-		//fileList.resize(numPartitions);
-		//char filename[260];
+		vector<ofstream> fileList;
+		fileList.resize(numPartitions);
+		char filename[260];
 
-		//// open files to write
-		//for (int i = 0; i < numPartitions; i++)
-		//{
-		//	sprintf(filename, "block_%d.trdat", i);
-		//	fileList[i].open(path + filename, ios::out | ios::trunc);
-		//	if (!fileList[i].is_open())
-		//		exit(ERR_FILE_UNABLE_TO_OPEN);
-		//}
-
-
-		//// intra pairs first
-		//for (int i = 0; i < pairIdxIntra.size(); i++)
-		//{
-		//	// switch regions to operate
-		//	for (int k = 0; k < numPartitions; k++)
-		//	{
-		//		// feature range
-		//		vector<FeatureType>::iterator	startIter = imgFeat[pairIdxIntra[i][0]].begin() + featLen * k;
-		//		vector<FeatureType>::iterator	endIter = startIter + featLen;
-
-		//		// partial feature
-		//		vector<FeatureType> f1(startIter, endIter);
-		//		startIter = imgFeat[pairIdxIntra[i][1]].begin() + featLen * k;
-		//		endIter = startIter + featLen;
-		//		vector<FeatureType> f2(startIter, endIter);
+		// open files to write
+		for (int i = 0; i < numPartitions; i++)
+		{
+			sprintf(filename, "block_%d.trdat", i);
+			fileList[i].open(path + filename, ios::out | ios::trunc);
+			if (!fileList[i].is_open())
+				exit(ERR_FILE_UNABLE_TO_OPEN);
+		}
 
 
-		//		// write pairwise feature to file
-		//		fileList[k] << 1 << "\t";									// intra pair label = 1
-		//		write_similarity_to_file(fileList[k], f1, f2);
-		//	}
-		//}
+		// intra pairs first
+		for (int i = 0; i < pairIdxIntra.size(); i++)
+		{
+			// switch regions to operate
+			for (int k = 0; k < numPartitions; k++)
+			{
+				// feature range
+				vector<FeatureType>::iterator	startIter = imgFeat[pairIdxIntra[i][0]].begin() + featLen * k;
+				vector<FeatureType>::iterator	endIter = startIter + featLen;
 
-		//// then inter pairs
-		//for (int i = 0; i < pairIdxInter.size(); i++)
-		//{
-		//	// switch regions to operate
-		//	for (int k = 0; k < numPartitions; k++)
-		//	{
-		//		// feature range
-		//		vector<FeatureType>::iterator	startIter = imgFeat[pairIdxInter[i][0]].begin() + featLen * k;
-		//		vector<FeatureType>::iterator	endIter = startIter + featLen;
-
-		//		// partial feature
-		//		vector<FeatureType> f1(startIter, endIter);
-		//		startIter = imgFeat[pairIdxInter[i][1]].begin() + featLen * k;
-		//		endIter = startIter + featLen;
-		//		vector<FeatureType> f2(startIter, endIter);
+				// partial feature
+				vector<FeatureType> f1(startIter, endIter);
+				startIter = imgFeat[pairIdxIntra[i][1]].begin() + featLen * k;
+				endIter = startIter + featLen;
+				vector<FeatureType> f2(startIter, endIter);
 
 
-		//		// write pairwise feature to file
-		//		fileList[k] << -1 << "\t";									// inter pair label = 0
-		//		write_similarity_to_file(fileList[k], f1, f2);
-		//	}
-		//}
+				// write pairwise feature to file
+				fileList[k] << 1 << "\t";									// intra pair label = 1
+				write_similarity_to_file(fileList[k], f1, f2);
+			}
+		}
 
-		//// close files
-		//for (int i = 0; i < numPartitions; i++)
-		//{
-		//	fileList[i].close();
-		//}
+		// then inter pairs
+		for (int i = 0; i < pairIdxInter.size(); i++)
+		{
+			// switch regions to operate
+			for (int k = 0; k < numPartitions; k++)
+			{
+				// feature range
+				vector<FeatureType>::iterator	startIter = imgFeat[pairIdxInter[i][0]].begin() + featLen * k;
+				vector<FeatureType>::iterator	endIter = startIter + featLen;
+
+				// partial feature
+				vector<FeatureType> f1(startIter, endIter);
+				startIter = imgFeat[pairIdxInter[i][1]].begin() + featLen * k;
+				endIter = startIter + featLen;
+				vector<FeatureType> f2(startIter, endIter);
+
+
+				// write pairwise feature to file
+				fileList[k] << -1 << "\t";									// inter pair label = 0
+				write_similarity_to_file(fileList[k], f1, f2);
+			}
+		}
+
+		// close files
+		for (int i = 0; i < numPartitions; i++)
+		{
+			fileList[i].close();
+		}
 	}
 }
 
@@ -1152,108 +1150,26 @@ float pri_feat::hist_dist_score(vector<FeatureType> f1, vector<FeatureType> f2)
 	return score;
 }
 
-void pri_feat::strip_score(vector<FeatureType> &stripFeat, vector<FeatureType> f1, vector<FeatureType> f2, int blkLen, int k)
-{
-	stripFeat.clear();
-
-	const int numBlocks = IMAGE_PARTITION_Y * IMAGE_PARTITION_X;
-
-	// size check
-	if (f1.size() != f2.size())
-		return;
-
-
-	// flexible matching
-	int start = (k - 1) * IMAGE_PARTITION_X;
-	int end = (k + 2) * IMAGE_PARTITION_X - 1;
-	//int start = (i ) * IMAGE_PARTITION_X;
-	//int end = (i + 1) * IMAGE_PARTITION_X - 1;
-
-	// bound
-	if (start < 0)
-		start = 0;
-	if (end > numBlocks)
-		end = numBlocks;
-
-	vector<float> matchScores;
-
-	// forward matching
-	for (int j = 0; j < IMAGE_PARTITION_X; j++)
-	{
-		vector<float> tempScores;
-		int pos = k * IMAGE_PARTITION_X + j;
-		vector<FeatureType> query(f1.begin() + pos * blkLen, f1.begin() + pos * blkLen + blkLen);
-		// search for every possible match
-		for (int k = start; k < end; k++)
-		{
-			vector<FeatureType> match(f2.begin() + k * blkLen, f2.begin() + k * blkLen + blkLen);
-			float s = hist_similartity_score_2(query, match);
-			tempScores.push_back(s);
-		}
-		std::sort(tempScores.begin(), tempScores.end());
-		matchScores.insert(matchScores.end(), tempScores.rbegin(), tempScores.rbegin() + IMAGE_PARTITION_X);
-	}
-
-	std::sort(matchScores.begin(), matchScores.end());
-	stripFeat.insert(stripFeat.end(), matchScores.rbegin(), matchScores.rend());
-	
-
-	// backward matching
-	matchScores.clear();
-	for (int j = 0; j < IMAGE_PARTITION_X; j++)
-	{
-		vector<float> tempScores;
-		int pos = k * IMAGE_PARTITION_X + j;
-		vector<FeatureType> query(f1.begin() + pos * blkLen, f1.begin() + pos * blkLen + blkLen);
-		// search for every possible match
-		for (int k = start; k < end; k++)
-		{
-			vector<FeatureType> match(f2.begin() + k * blkLen, f2.begin() + k * blkLen + blkLen);
-			float s = hist_similartity_score_2(query, match);
-			tempScores.push_back(s);
-		}
-		std::sort(tempScores.begin(), tempScores.end());
-		matchScores.insert(matchScores.end(), tempScores.rbegin(), tempScores.rbegin() + IMAGE_PARTITION_X);
-	}
-
-	std::sort(matchScores.begin(), matchScores.end());
-	stripFeat.insert(stripFeat.end(), matchScores.rbegin(), matchScores.rend());
-
-
-
-
-}
-
 
 void pri_feat::write_similarity_to_file(ofstream &file, vector<FeatureType> f1, vector<FeatureType> f2, int featLen, int k)
 {
 	if (f1.size() != f2.size())
 		return;
 
-	//float		val;
-	//for (int i = 0; i < f1.size(); i++)
-	//{
-	//	val = similarity_score(f1[i], f2[i]);
-
-	//	if ( val != 0)
-	//	{
-	//		file << i+1 << ":" << val << " ";
-	//	}
-	//}
-
-	vector<float> stripScore;
-	strip_score(stripScore, f1, f2, featLen, k);
-	for (int i = 0; i < stripScore.size(); i++)
+	float		val;
+	for (int i = 0; i < f1.size(); i++)
 	{
-		if (stripScore[i] != 0)
+		val = similarity_score(f1[i], f2[i]);
+
+		if ( val != 0)
 		{
-			file << i + 1 << ":" << stripScore[i] << " ";
+			file << i+1 << ":" << val << " ";
 		}
 	}
 
 	// if the last element is 0, write it to maintain the proper size
-	if (stripScore.back() == 0)
-		file << stripScore.size() << ":" << stripScore.back() << " ";
+	if (val == 0)
+		file << f1.size() << ":" << val << " ";
 
 	file << endl;		// write end of line
 }
@@ -1495,7 +1411,7 @@ void pri_feat::save_pairwise_feature_image()
 
 void pri_feat::get_combine_image_feature(vector<FeatureType> & combFeat, vector<FeatureType> f1, vector<FeatureType> f2)
 {
-	const int numBlocks = IMAGE_PARTITION_Y;
+	const int numBlocks = IMAGE_PARTITION_Y * IMAGE_PARTITION_X;
 
 	// size check
 	if (f1.size() != f2.size())
@@ -1523,25 +1439,64 @@ void pri_feat::get_combine_image_feature(vector<FeatureType> & combFeat, vector<
 		exit(ERR_SEE_NOTICE);
 	}
 
-	size_t	featLen = f1.size() / IMAGE_PARTITION_Y / IMAGE_PARTITION_X;
+	size_t	featLen = blockWeights[0].size();
+	if (featLen * numBlocks != f1.size())
+		exit(ERR_SIZE_MISMATCH);
 
-	for (int i = 0; i < IMAGE_PARTITION_Y; i++)
+	// basic block similarity
+	int		featPtr = 0;
+	for (int i = 0; i < numBlocks; i++)
 	{
-		vector<float> stripScore;
-		strip_score(stripScore, f1, f2, featLen, i);
-		if (stripScore.size() != blockWeights[i].size())
+		float	sim = 0;
+		for (int j = 0; j < featLen; j++)
 		{
-			printf("Error: strip score size mismatch!\n");
-			getchar();
-			exit(-1);
+			sim += blockWeights[i][j] * similarity_score((float)f1[featPtr], (float)f2[featPtr]);
+			featPtr++;
 		}
-		float	score = 0;
-		for (int j = 0; j < blockWeights[i].size(); j++)
-		{
-			score += blockWeights[i][j] * stripScore[j];
-		}
-		combFeat.push_back(score);
+		combFeat.push_back(sim);
 	}
+
+	// calculate mean and standard deviation
+	float	sum = std::accumulate(combFeat.begin(), combFeat.end(), 0.f);
+	float	mean = sum / numBlocks;
+	float	accum = 0.0;
+	std::for_each(combFeat.begin(), combFeat.end(), 
+	[&](const float d)
+	{ 
+		accum += (d - mean)*(d - mean); 
+	}
+	);
+
+	float stdev = sqrt(accum / numBlocks);
+	combFeat.push_back(mean);
+	combFeat.push_back(stdev);
+	
+
+	// try some combination
+	// combination of two blocks, mean and standard dev
+	for (int i = 0; i < numBlocks; i++)
+	for (int j = i + IMAGE_PARTITION_X; j < numBlocks; j += IMAGE_PARTITION_X)
+	{
+		float	sim = (combFeat[i] + combFeat[j]) / 2;
+		float	stdev2 = (combFeat[i] - sim) * (combFeat[i] - sim) + (combFeat[j] - sim) * (combFeat[j] - sim);
+		stdev2 = sqrt(stdev2 / 2);
+		combFeat.push_back(sim);
+		combFeat.push_back(stdev2);
+	}
+	// combination of three blocks
+	for (int i = 0; i < numBlocks; i++)
+	for (int j = i + IMAGE_PARTITION_X; j < numBlocks; j += IMAGE_PARTITION_X)
+	for (int k = j + IMAGE_PARTITION_X; k < numBlocks; k += IMAGE_PARTITION_X)
+	{
+		float	sim = (combFeat[i] + combFeat[j] + combFeat[k]) / 3;
+		float	stdev3 = (combFeat[i] - sim) * (combFeat[i] - sim) 
+						+ (combFeat[j] - sim) * (combFeat[j] - sim) 
+						+ (combFeat[k] - sim) * (combFeat[k] - sim);
+		stdev3 = sqrt(stdev3 / 3);
+		combFeat.push_back(sim);
+		combFeat.push_back(stdev3);
+	}
+	
 }
 
 
@@ -2067,9 +2022,6 @@ void pri_feat::partition_sort_show()
 	if (imgFeat.size() < 1)
 		return;
 
-	load_block_weights();
-	create_pair_index();
-
 	const int	numPartition = IMAGE_PARTITION_Y;
 	// sort for each partition
 	for (int i = 0; i < numPersons; i++)
@@ -2085,7 +2037,7 @@ void pri_feat::partition_sort_show()
 			int		gIdx = queryIdx[j][k];	// gallery index
 			vector<float>	combFeat;
 			// get lower level score
-			get_combine_image_feature(combFeat, imgFeat[qIdx], imgFeat[gIdx]);
+			get_combine_image_feature_no_weight(combFeat, imgFeat[qIdx], imgFeat[gIdx]);
 
 			//for (int de = 0; de < combFeat.size(); de++)
 			//	cout << combFeat[de];
