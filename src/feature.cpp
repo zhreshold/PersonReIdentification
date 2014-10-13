@@ -1713,7 +1713,7 @@ void pri_feat::get_pairwise_image_feature_rand(vector<FeatureType> &pairFeat, ve
 
 	// parameter
 	const int searchOffset = 12;
-	const int step = 4;
+	const int step = 5;
 
 	
 	auto featPtr = f1.begin();

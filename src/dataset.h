@@ -28,11 +28,11 @@
 #include <vector>
 #include <opencv\cv.h>
 
-#define	MAX_NUM_RAND_BLOCKS		500
-#define MAX_RAND_BLOCK_WIDTH	20
-#define	MAX_RAND_BLOCK_HEIGHT	30
-#define MIN_RAND_BLOCK_WIDTH	5
-#define	MIN_RAND_BLOCK_HEIGHT	5
+#define	MAX_NUM_RAND_BLOCKS		100
+#define MAX_RAND_BLOCK_WIDTH	30
+#define	MAX_RAND_BLOCK_HEIGHT	40
+#define MIN_RAND_BLOCK_WIDTH	8
+#define	MIN_RAND_BLOCK_HEIGHT	8
 #define	NEW_RAND_BLOCKS			0
 
 
