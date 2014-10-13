@@ -66,8 +66,8 @@ typedef	float	LDType;								// local descriptor type
 
 #define	MAX_VECTOR_SIZE			16589934592
 #define	ROOT_PATH				"../../../"
-//#define	RANDOM_SEED				7000
-#define	RANDOM_SEED				((int)time(NULL))				// set to fixed number for debug only
+#define	RANDOM_SEED				7000
+//#define	RANDOM_SEED				((int)time(NULL))				// set to fixed number for debug only
 #define	DEV_DEBUG				1
 
 // datasets to test
@@ -82,7 +82,7 @@ enum DATASET_TYPES
 #define	PARTITION_OVERLAP		0.5					// percentage of overlapping
 
 // kmeans
-#define	NEW_KMEANS_CENTERS		0					// 1: train new centers
+#define	NEW_KMEANS_CENTERS		1					// 1: train new centers
 
 // local descriptor & GMM model
 #define	LD_DIM					15					// local descriptor dimension
