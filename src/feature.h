@@ -25,8 +25,8 @@
 #include "define.h"
 #include "dataset.h"
 #include <vector>
-#include <opencv\cv.h>
-#include <opencv\highgui.h>
+#include <opencv2\core\core.hpp>
+#include <opencv2\highgui\highgui.hpp>
 extern "C"
 {
 #include <vl/gmm.h>
@@ -156,6 +156,7 @@ private:
 	float	similarity_score(float f1, float f2);
 	void	write_similarity_to_file(ofstream &file, vector<FeatureType> f1, vector<FeatureType> f2);	// write similarity to file
 	void	get_combine_image_feature(vector<FeatureType> & combFeat, vector<FeatureType> f1, vector<FeatureType> f2);
+	void	get_combine_image_feature_simple(vector<FeatureType> & combFeat, vector<FeatureType> f1, vector<FeatureType> f2);
 	float	image_pairwise_score(int idx1, int idx2);
 	
 	

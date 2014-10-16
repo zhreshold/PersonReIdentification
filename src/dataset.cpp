@@ -72,51 +72,96 @@ void pri_dataset::init_viper()
 	
 	if (m_phase == PHASE_TRAINING)		
 	{
-		// init for training
-		for (int i = 0; i < numPersonTotal; i++)
-			perm.push_back(i);
-
-		numPersons = NUM_PERSON_TRAIN;
-
-		// get random permutation by shuffling
-		srand(RANDOM_SEED);
-		random_shuffle(perm.begin(), perm.end());
-
-		for (int i = 0; i < numPersons; i++)
+		if (CREATE_NEW_SETS)
 		{
-			vector<int>		personQuery;
+			// init for training
+			for (int i = 0; i < numPersonTotal; i++)
+				perm.push_back(i);
 
-			// image 0 for person i
-			sprintf_s(filename, "%03d_00.bmp", perm[i]);
-			filenames.push_back(path + string(filename));
-			personQuery.push_back(index);
-			index++;
+			numPersons = NUM_PERSON_TRAIN;
 
-			// image 1 for person i
-			sprintf_s(filename, "%03d_01.bmp", perm[i]);
-			filenames.push_back(path + string(filename));
-			personQuery.push_back(index);
-			index++;
+			// get random permutation by shuffling
+			srand(RANDOM_SEED);
+			random_shuffle(perm.begin(), perm.end());
 
-			// push back query indexes for person i, append person id
-			personQuery.push_back(perm[i]);
-			queryIdx.push_back(personQuery);
+			for (int i = 0; i < numPersons; i++)
+			{
+				vector<int>		personQuery;
+
+				// image 0 for person i
+				sprintf_s(filename, "%03d_00.bmp", perm[i]);
+				filenames.push_back(path + string(filename));
+				personQuery.push_back(index);
+				index++;
+
+				// image 1 for person i
+				sprintf_s(filename, "%03d_01.bmp", perm[i]);
+				filenames.push_back(path + string(filename));
+				personQuery.push_back(index);
+				index++;
+
+				// push back query indexes for person i, append person id
+				personQuery.push_back(perm[i]);
+				queryIdx.push_back(personQuery);
+			}
+
+			// write the rest to file for test
+			ofstream file(ROOT_PATH + string("cache/testPartition.txt"), ios::out | ios::trunc);
+			if (!file.is_open())
+			{
+				exit(ERR_FILE_UNABLE_TO_OPEN);
+			}
+
+			for (int i = numPersons; i < numPersonTotal; i++)
+			{
+				file << perm[i] << endl;
+			}
+
+			file.close();
 		}
-
-		// write the rest to file for test
-		ofstream file(ROOT_PATH + string("cache/testPartition.txt") , ios::out | ios::trunc);
-		if (!file.is_open())
+		else
 		{
-			exit(ERR_FILE_UNABLE_TO_OPEN);
+			// init for train from file list
+			numPersons = NUM_PERSON_TRAIN;
+
+			// load partition for test from file
+			ifstream file(ROOT_PATH + string("cache/trainPartition.txt"), ios::in);
+			if (!file.is_open())
+			{
+				exit(ERR_FILE_NOT_EXIST);
+			}
+
+			for (int i = 0; i < numPersons; i++)
+			{
+				int		id;
+				file >> id;
+				perm.push_back(id);
+			}
+
+			file.close();
+
+			// load image names according to the partition
+			for (int i = 0; i < numPersons; i++)
+			{
+				vector<int>		personQuery;
+
+				// image 0 for person i
+				sprintf_s(filename, "%03d_00.bmp", perm[i]);
+				filenames.push_back(path + string(filename));
+				personQuery.push_back(index);
+				index++;
+
+				// image 1 for person i
+				sprintf_s(filename, "%03d_01.bmp", perm[i]);
+				filenames.push_back(path + string(filename));
+				personQuery.push_back(index);
+				index++;
+
+				// push back query indexes for person i, append person id
+				personQuery.push_back(perm[i]);
+				queryIdx.push_back(personQuery);
+			}
 		}
-
-		for (int i = numPersons; i < numPersonTotal; i++)
-		{
-			file << perm[i] << endl;
-		}
-
-		file.close();
-
 	}
 	else if (m_phase == PHASE_TESTING)
 	{

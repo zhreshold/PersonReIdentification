@@ -28,8 +28,11 @@
 #include <vector>
 #include <opencv\cv.h>
 
+#define CREATE_NEW_SETS		0
+
 using namespace std;
 using namespace cv;
+
 
 
 class pri_dataset

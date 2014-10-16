@@ -672,7 +672,51 @@ void pri_feat::extract_feature_block(vector<FeatureType> &blockFeat, Rect blkROI
 	}
 
 	// LBP feature
+	vector<FeatureType> lbpHist;
+	lbpHist.resize(256);
+	fill(lbpHist.begin(), lbpHist.end(), 0.f);
+	const int lbpThr = 0;
+	int lbpCount = 0;
+	for (int row = blkROI.y; row < blkROI.y + blkROI.height; row++)
+	{
+		for (int col = blkROI.x; col < blkROI.x + blkROI.width; col++)
+		{
+			// check mask at this pixel and its 4 neighbors
+			if (mask.at<UChar>(row, col)
+				&& mask.at<UChar>(row, col - 1)
+				&& mask.at<UChar>(row, col + 1)
+				&& mask.at<UChar>(row - 1, col)
+				&& mask.at<UChar>(row + 1, col)
+				&& mask.at<UChar>(row - 1, col - 1)
+				&& mask.at<UChar>(row + 1, col - 1)
+				&& mask.at<UChar>(row - 1, col + 1)
+				&& mask.at<UChar>(row + 1, col + 1))
+			{
+				int lbpVal = 0;
+				UChar center = grayImage.at<UChar>(row, col) + lbpThr;
+				if (grayImage.at<UChar>(row - 1, col) > center) lbpVal += 1;
+				if (grayImage.at<UChar>(row - 1, col + 1) > center) lbpVal += 2;
+				if (grayImage.at<UChar>(row, col + 1) > center) lbpVal += 4;
+				if (grayImage.at<UChar>(row + 1, col + 1) > center) lbpVal += 8;
+				if (grayImage.at<UChar>(row + 1, col) > center) lbpVal += 16;
+				if (grayImage.at<UChar>(row + 1, col - 1) > center) lbpVal += 32;
+				if (grayImage.at<UChar>(row, col - 1) > center) lbpVal += 64;
+				if (grayImage.at<UChar>(row - 1, col - 1) > center) lbpVal += 128;
 
+				lbpHist[lbpVal] += 1;
+				lbpCount++;
+			}
+		}
+	}
+
+	// L1 norm of LBP
+	if (lbpCount > 0)
+	{
+		for (vector<FeatureType>::iterator iter = lbpHist.begin(); iter != lbpHist.end(); iter++)
+			*iter /= lbpCount;
+	}
+
+	blockFeat.insert(blockFeat.end(), lbpHist.begin(), lbpHist.end());
 
 	// fisher encoder
 	vector<FeatureType> fisherBuffer;
@@ -876,6 +920,18 @@ float pri_feat::similarity_score(float f1, float f2)
 	}
 
 	return val;
+}
+
+float chi_square_dist(float f1, float f2)
+{
+	if (f1 + f2 == 0)
+	{
+		return 0;
+	}
+	else
+	{
+		return (f1 - f2)*(f1 - f2) / (f1 + f2);
+	}
 }
 
 
@@ -1086,22 +1142,22 @@ void pri_feat::save_pairwise_feature_image()
 		return;
 	}
 
-	load_block_weights();
+	//load_block_weights();
 	create_pair_index();
 
-	if (blockWeights.size() < 1)
-	{
-		return;
-	}
+	//if (blockWeights.size() < 1)
+	//{
+	//	return;
+	//}
 
-	const int	numPartitions = IMAGE_PARTITION_Y * IMAGE_PARTITION_X;
-	size_t		featLen = imgFeat[0].size() / numPartitions;
+	//const int	numPartitions = IMAGE_PARTITION_Y * IMAGE_PARTITION_X;
+	//size_t		featLen = imgFeat[0].size() / numPartitions;
 
-	if (blockWeights[0].size() != featLen)
-	{
-		printf("Load weights length mismatch!\n");
-		exit(ERR_SEE_NOTICE);
-	}
+	//if (blockWeights[0].size() != featLen)
+	//{
+	//	printf("Load weights length mismatch!\n");
+	//	exit(ERR_SEE_NOTICE);
+	//}
 
 	if (pairIdxIntra.size() < 1 || pairIdxInter.size() < 1)
 		create_pair_index();
@@ -1115,7 +1171,7 @@ void pri_feat::save_pairwise_feature_image()
 	for (int i = 0; i < pairIdxIntra.size(); i++)
 	{
 		vector<float>	combFeat;
-		get_combine_image_feature(combFeat, imgFeat[pairIdxIntra[i][0]], imgFeat[pairIdxIntra[i][1]]);
+		get_combine_image_feature_simple(combFeat, imgFeat[pairIdxIntra[i][0]], imgFeat[pairIdxIntra[i][1]]);
 		file << 1 << "\t";		// intra label 1
 		for (int j = 0; j < combFeat.size(); j++)
 			file << j + 1 << ":" << combFeat[j] << " ";
@@ -1126,7 +1182,7 @@ void pri_feat::save_pairwise_feature_image()
 	for (int i = 0; i < pairIdxInter.size(); i++)
 	{
 		vector<float>	combFeat;
-		get_combine_image_feature(combFeat, imgFeat[pairIdxInter[i][0]], imgFeat[pairIdxInter[i][1]]);
+		get_combine_image_feature_simple(combFeat, imgFeat[pairIdxInter[i][0]], imgFeat[pairIdxInter[i][1]]);
 		file << -1 << "\t";		// inter label -1
 		for (int j = 0; j < combFeat.size(); j++)
 			file << j + 1 << ":" << combFeat[j] << " ";
@@ -1134,6 +1190,23 @@ void pri_feat::save_pairwise_feature_image()
 	}
 
 	file.close();
+}
+
+void pri_feat::get_combine_image_feature_simple(vector<FeatureType> & combFeat, vector<FeatureType> f1, vector<FeatureType> f2)
+{
+	// size check
+	if (f1.size() != f2.size())
+		return;
+
+	combFeat.clear();
+
+	for (int i = 0; i < f1.size(); i++)
+	{
+		float	score = chi_square_dist(f1[i], f2[i]);
+		combFeat.push_back(score);
+	}
+
+
 }
 
 void pri_feat::get_combine_image_feature(vector<FeatureType> & combFeat, vector<FeatureType> f1, vector<FeatureType> f2)
@@ -1231,13 +1304,13 @@ float pri_feat::image_pairwise_score(int idx1, int idx2)
 {
 
 	// init
-	if (blockWeights.size() < 1)
-		load_block_weights();
+	//if (blockWeights.size() < 1)
+	//	load_block_weights();
 
 	if (imageWeights.size() < 1)
 		load_image_weights();
 
-	if (blockWeights.size() < 1 || imageWeights.size() < 1)
+	if (imageWeights.size() < 1)
 	{
 		printf("Error: SVM model weights invalid!\n");
 		exit(ERR_SEE_NOTICE);
@@ -1247,7 +1320,7 @@ float pri_feat::image_pairwise_score(int idx1, int idx2)
 	vector<float>	combFeat;
 
 	// get lower level score
-	get_combine_image_feature(combFeat, imgFeat[idx1], imgFeat[idx2]);
+	get_combine_image_feature_simple(combFeat, imgFeat[idx1], imgFeat[idx2]);
 
 	float	score = 0;
 	for (int i = 0; i < imageWeights.size(); i++)
