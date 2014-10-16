@@ -68,7 +68,7 @@ typedef	float	LDType;								// local descriptor type
 #define	ROOT_PATH				"../../../"
 #define	RANDOM_SEED				7000
 //#define	RANDOM_SEED				((int)time(NULL))				// set to fixed number for debug only
-#define	DEV_DEBUG				1
+#define	DEV_DEBUG				0
 
 // datasets to test
 enum DATASET_TYPES

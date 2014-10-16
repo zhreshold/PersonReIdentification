@@ -1387,8 +1387,9 @@ void pri_feat::save_pairwise_feature_image()
 	for (int i = 0; i < pairIdxIntra.size(); i++)
 	{
 		cout << "Intra: " << i << endl;
-		vector<float>	combFeat;
+		vector<float>	combFeat, combFeat2;
 		get_combine_image_feature_no_weight(combFeat, imgFeat[pairIdxIntra[i][0]], imgFeat[pairIdxIntra[i][1]]);
+		//get_combine_image_feature_no_weight(combFeat2, imgFeat[pairIdxIntra[i][1]], imgFeat[pairIdxIntra[i][0]]);
 		file << 1 << "\t";		// intra label 1
 		for (int j = 0; j < combFeat.size(); j++)
 			file << j + 1 << ":" << combFeat[j] << " ";
@@ -1406,8 +1407,9 @@ void pri_feat::save_pairwise_feature_image()
 	for (int i = 0; i < pairIdxInter.size(); i++)
 	{
 		cout << "Inter: " << i << endl;
-		vector<float>	combFeat;
+		vector<float>	combFeat, combFeat2;
 		get_combine_image_feature_no_weight(combFeat, imgFeat[pairIdxInter[i][0]], imgFeat[pairIdxInter[i][1]]);
+		//get_combine_image_feature_no_weight(combFeat2, imgFeat[pairIdxInter[i][1]], imgFeat[pairIdxInter[i][0]]);
 		file << -1 << "\t";		// inter label -1
 		for (int j = 0; j < combFeat.size(); j++)
 			file << j + 1 << ":" << combFeat[j] << " ";
@@ -1560,7 +1562,7 @@ void pri_feat::get_combine_image_feature_no_weight(vector<FeatureType> & combFea
 		// forward matching
 		for (int j = 0; j < IMAGE_PARTITION_X; j++)
 		{
-			float bestScore = -1e6;
+			float bestScore = -1e10;
 			int pos = i * IMAGE_PARTITION_X + j;
 			vector<FeatureType> query(f1.begin() + pos * featLen, f1.begin() + pos * featLen + featLen);
 			// search for every possible match
@@ -1643,20 +1645,19 @@ void pri_feat::get_combine_image_feature_no_weight(vector<FeatureType> & combFea
 	vector<FeatureType> featTmp;
 	for (int i = 0; i < combFeat.size(); i++)
 	{
-		for (int j = i + 1; j < combFeat.size(); j++)
+		for (int j = 0; j < combFeat.size(); j++)
 		{
-			// feature? si/sj
+			// feature? 
 			float	si = combFeat[i];
 			float	sj = combFeat[j];
 
-			if (sj == 0)
-			{
-				sj = 0.1;
-			}
-			featTmp.push_back(si / sj);
+			featTmp.push_back(si + sj);
+			//featTmp.push_back(abs(si - sj));
 		}
 	}
+	featTmp.insert(featTmp.end(), combFeat.begin(), combFeat.end());
 	combFeat = featTmp;
+	//sort(combFeat.rbegin(), combFeat.rend());
 
 
 }
@@ -1665,13 +1666,14 @@ float pri_feat::image_pairwise_score(int idx1, int idx2)
 {
 
 	// init
-	if (blockWeights.size() < 1)
-		load_block_weights();
+	//if (blockWeights.size() < 1)
+	//	load_block_weights();
 
 	if (imageWeights.size() < 1)
 		load_image_weights();
 
-	if (blockWeights.size() < 1 || imageWeights.size() < 1)
+	//if (blockWeights.size() < 1 || imageWeights.size() < 1)
+	if (imageWeights.size() < 1)
 	{
 		printf("Error: SVM model weights invalid!\n");
 		exit(ERR_SEE_NOTICE);
@@ -1681,7 +1683,7 @@ float pri_feat::image_pairwise_score(int idx1, int idx2)
 	vector<float>	combFeat;
 
 	// get lower level score
-	get_combine_image_feature(combFeat, imgFeat[idx1], imgFeat[idx2]);
+	get_combine_image_feature_no_weight(combFeat, imgFeat[idx1], imgFeat[idx2]);
 
 	float	score = 0;
 	for (int i = 0; i < imageWeights.size(); i++)
@@ -1703,13 +1705,14 @@ void pri_feat::rank_cmc()
 
 	for (int i = 0; i < numPersons; i++)
 	{
+		cout << "ranking " << i << endl;
 		vector<sort_descend> search;
 		int	qIdx = queryIdx[i][0];		// use the first image in each query
 		for (int j = 0; j < numPersons; j++)
 		for (int k = 1; k < numShots; k++)
 		{
 			int		gIdx = queryIdx[j][k];	// gallery index
-			float	score = image_pairwise_score(qIdx, gIdx);
+			float	score = image_pairwise_score(qIdx, gIdx) + image_pairwise_score(gIdx, qIdx);
 			sort_descend sort;
 			sort.score = score;
 			sort.id = imgFeatID[gIdx];
