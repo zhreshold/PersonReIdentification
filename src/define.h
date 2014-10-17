@@ -67,7 +67,7 @@ typedef	float	LDType;								// local descriptor type
 #define	MAX_VECTOR_SIZE			16589934592
 #define	ROOT_PATH				"../../../"
 #define	RANDOM_SEED				((int)time(NULL))				// set to fixed number for debug only
-#define	DEV_DEBUG				0
+#define	DEV_DEBUG				1
 
 // datasets to test
 enum DATASET_TYPES

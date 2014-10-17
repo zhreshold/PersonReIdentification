@@ -651,25 +651,40 @@ void pri_feat::extract_feature_block(vector<FeatureType> &blockFeat, Rect blkROI
 	}
 
 	// L1-norm color histogram
+	//if (pixelCount > 0)
+	//{
+	//	for (vector<FeatureType>::iterator iter = blockFeat.begin(); iter != blockFeat.end(); iter++)
+	//		*iter /= pixelCount;
+	//}
+
+	// L2-norm color histogram
+	double	normSum = 0;
 	if (pixelCount > 0)
 	{
 		for (vector<FeatureType>::iterator iter = blockFeat.begin(); iter != blockFeat.end(); iter++)
-			*iter /= pixelCount;
+			normSum += (*iter) * (*iter);
 	}
+	normSum = sqrt(normSum);
+	if (normSum > 0)
+	{
+		for (vector<FeatureType>::iterator iter = blockFeat.begin(); iter != blockFeat.end(); iter++)
+			*iter /= normSum;
+	}
+	
 
 	// add color percent feature
-	int		percentPartition = 5;
-	offset = 128;
+	//int		percentPartition = 5;
+	//offset = 128;
 
-	for (int i = 0; i < COLOR_LABEL_COUNT; i++)
-	for (int j = 0; j < 5; j++)
-	{
-		bin = i * percentPartition + j + offset;
-		if (blockFeat.at(bin) > j / (FeatureType)percentPartition)
-			blockFeat.push_back(1);
-		else
-			blockFeat.push_back(0);
-	}
+	//for (int i = 0; i < COLOR_LABEL_COUNT; i++)
+	//for (int j = 0; j < 5; j++)
+	//{
+	//	bin = i * percentPartition + j + offset;
+	//	if (blockFeat.at(bin) > j / (FeatureType)percentPartition)
+	//		blockFeat.push_back(1);
+	//	else
+	//		blockFeat.push_back(0);
+	//}
 
 	// LBP feature
 	vector<FeatureType> lbpHist;
@@ -930,7 +945,7 @@ float chi_square_dist(float f1, float f2)
 	}
 	else
 	{
-		return (f1 - f2)*(f1 - f2) / (f1 + f2);
+		return (f1 - f2)*(f1 - f2) / (abs(f1) + abs(f2));
 	}
 }
 
@@ -1413,6 +1428,7 @@ void pri_feat::debug_show_top_n(int n)
 		sprintf(filename, "%sdata/VIPeR/%03d_00.bmp", ROOT_PATH, queryIdx[idx][numShots]);
 		qImage = imread(filename, 1);
 		qImage.copyTo(canvas(roi));
+		cv::rectangle(canvas, roi, Scalar(0, 255, 0), 2);
 
 		// top n images
 		for (int i = 0; i < n; i++)
@@ -1422,6 +1438,10 @@ void pri_feat::debug_show_top_n(int n)
 			cout << "Top score #" << i + 1 << ": " << results[idx][i].score << endl;
 			qImage = imread(filename, 1);
 			qImage.copyTo(canvas(roi));
+			if (results[idx][i].id == queryIdx[idx][numShots])
+			{
+				cv::rectangle(canvas, roi, Scalar(0, 0, 255), 2);
+			}
 		}
 
 		// target image
@@ -1441,11 +1461,14 @@ void pri_feat::debug_show_top_n(int n)
 		sprintf(filename, "%sdata/VIPeR/%03d_01.bmp", ROOT_PATH, queryIdx[idx][numShots]);
 		qImage = imread(filename, 1);
 		qImage.copyTo(canvas(roi));
+		cv::rectangle(canvas, roi, Scalar(255, 0, 0), 2);
 
 		// show image
 		destroyAllWindows();
-		imshow("Top n debug window", canvas);
-		waitKey(0);
+		//imshow("Top n debug window", canvas);
+		sprintf(filename, "%sdebug/%03d_rank_%03d.jpg", ROOT_PATH, queryIdx[idx][numShots], rank + 1);
+		imwrite(filename, canvas);
+		//waitKey(100);
 	}
 	
 }
